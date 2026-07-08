@@ -4,10 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { AuthShell, PasswordInput } from "@/components/auth";
+import { AuthField, AuthShell, PasswordInput } from "@/components/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,18 +45,17 @@ export default function LoginPage() {
       subtitle="Log in to keep tracking your expenses."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            autoFocus
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          required
+          autoFocus
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
         <PasswordInput
           value={password}
@@ -72,7 +69,12 @@ export default function LoginPage() {
           </p>
         )}
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={loading}
+          className="h-10 w-full"
+        >
           {loading ? "Logging in…" : "Log in"}
         </Button>
       </form>

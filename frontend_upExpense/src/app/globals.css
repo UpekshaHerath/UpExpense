@@ -192,6 +192,14 @@
     scrollbar-gutter: stable;
   }
 
+  /* Radix (react-remove-scroll) adds margin-right to <body> while a menu or
+     dialog is open, to compensate for the scrollbar it hides. The gutter
+     above already reserves that space, so the extra margin double-shifts the
+     page. !important needed to beat the inline style. */
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+
   /* Tailwind v4 preflight resets buttons to `cursor: default`. Restore the
      hand cursor on every enabled clickable, including Radix items that
      render as divs (menu items, select options). */
