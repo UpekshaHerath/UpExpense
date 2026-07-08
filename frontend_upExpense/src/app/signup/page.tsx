@@ -4,10 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { AuthShell, PasswordInput } from "@/components/auth";
+import { AuthField, AuthShell, PasswordInput } from "@/components/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -79,30 +77,28 @@ export default function SignupPage() {
       subtitle="Track daily expenses. Understand your year."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="username">Username</Label>
-          <Input
-            id="username"
-            type="text"
-            required
-            autoFocus
-            autoComplete="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-        </div>
+        <AuthField
+          id="username"
+          label="Username"
+          type="text"
+          required
+          autoFocus
+          autoComplete="username"
+          placeholder="jane_doe"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
 
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
         <PasswordInput
           value={password}
@@ -117,7 +113,12 @@ export default function SignupPage() {
           </p>
         )}
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={loading}
+          className="h-10 w-full"
+        >
           {loading ? "Creating account…" : "Sign up"}
         </Button>
       </form>
