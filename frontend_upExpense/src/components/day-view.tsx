@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/date-picker";
 import { DaySkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
 
@@ -89,14 +90,12 @@ export function DayView({ date }: { date: string }) {
           <ChevronLeft />
         </Button>
 
-        <div className="text-center">
-          <Input
-            type="date"
+        <div className="min-w-0 text-center">
+          <DatePicker
             value={date}
             max={today}
-            onChange={(e) => e.target.value && goto(e.target.value)}
-            className="mx-auto h-8 w-fit text-sm dark:[color-scheme:dark]"
-            aria-label="Jump to date"
+            onChange={goto}
+            ariaLabel="Jump to date"
           />
           <p className="mt-1.5 text-sm font-medium text-muted-foreground">
             {relativeLabel && (
@@ -309,23 +308,29 @@ function ExpenseForm({
 
   return (
     <Card>
-      <CardContent className="space-y-3 pt-4">
+      <CardContent className="space-y-3">
         <form onSubmit={handleSubmit} className="space-y-3">
           <p className="text-sm font-semibold">
             {editing ? "Edit expense" : "Add expense"}
           </p>
 
-          <Input
-            ref={amountRef}
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0.01"
-            placeholder="Amount (Rs.)"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="h-11 text-lg font-semibold"
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">
+              Rs.
+            </span>
+            <Input
+              ref={amountRef}
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              aria-label="Amount in rupees"
+              className="h-11 pl-10 text-lg font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
 
           {/* Category chips — tap to select (PRD EXP-5) */}
           <div className="flex flex-wrap gap-1.5">

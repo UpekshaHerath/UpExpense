@@ -123,6 +123,50 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* User-selectable accent (Settings → Accent color). No attribute = emerald
+   default above. Light uses the 600 step, dark the 500 step, mirroring the
+   emerald pair. `.dark[data-accent]` outranks `.dark`, so order is safe. */
+[data-accent="blue"] {
+  --primary: oklch(0.546 0.245 262.881);
+  --ring: oklch(0.546 0.245 262.881);
+}
+.dark[data-accent="blue"] {
+  --primary: oklch(0.623 0.214 259.815);
+  --ring: oklch(0.623 0.214 259.815);
+}
+[data-accent="violet"] {
+  --primary: oklch(0.541 0.281 293.009);
+  --ring: oklch(0.541 0.281 293.009);
+}
+.dark[data-accent="violet"] {
+  --primary: oklch(0.606 0.25 292.717);
+  --ring: oklch(0.606 0.25 292.717);
+}
+[data-accent="rose"] {
+  --primary: oklch(0.586 0.253 17.585);
+  --ring: oklch(0.586 0.253 17.585);
+}
+.dark[data-accent="rose"] {
+  --primary: oklch(0.645 0.246 16.439);
+  --ring: oklch(0.645 0.246 16.439);
+}
+[data-accent="orange"] {
+  --primary: oklch(0.646 0.222 41.116);
+  --ring: oklch(0.646 0.222 41.116);
+}
+.dark[data-accent="orange"] {
+  --primary: oklch(0.705 0.213 47.604);
+  --ring: oklch(0.705 0.213 47.604);
+}
+[data-accent="teal"] {
+  --primary: oklch(0.6 0.118 184.704);
+  --ring: oklch(0.6 0.118 184.704);
+}
+.dark[data-accent="teal"] {
+  --primary: oklch(0.704 0.14 182.503);
+  --ring: oklch(0.704 0.14 182.503);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -132,5 +176,23 @@
   }
   html {
     @apply font-sans;
+  }
+  /* No horizontal page scroll — stray overflow (charts, popovers) must not
+     let the page pan sideways on touch. `clip` instead of `hidden` so no
+     scroll container is created and the sticky header keeps working. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  /* Tailwind v4 preflight resets buttons to `cursor: default`. Restore the
+     hand cursor on every enabled clickable, including Radix items that
+     render as divs (menu items, select options). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="tab"]:not(:disabled) {
+    cursor: pointer;
   }
 }

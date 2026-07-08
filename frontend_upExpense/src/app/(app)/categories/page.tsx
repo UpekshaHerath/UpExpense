@@ -151,7 +151,7 @@ export default function CategoriesPage() {
       <h1 className="text-xl font-bold">Categories</h1>
 
       <Card>
-        <CardContent className="pt-4">
+        <CardContent>
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
             <Input
               type="text"
@@ -179,7 +179,10 @@ export default function CategoriesPage() {
         <Card className="py-0">
           <ul className="divide-y">
             {categories.map((cat) => (
-              <li key={cat.id} className="flex items-center gap-3 px-4 py-3">
+              <li
+                key={cat.id}
+                className="flex flex-wrap items-center gap-3 px-4 py-3"
+              >
                 {editId === cat.id ? (
                   <>
                     <IconPicker value={editIcon} onChange={setEditIcon} />
@@ -217,7 +220,7 @@ export default function CategoriesPage() {
                     >
                       {cat.icon ?? "🏷️"}
                     </span>
-                    <span className="flex-1 text-sm font-medium">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {cat.name}
                     </span>
                     <span
