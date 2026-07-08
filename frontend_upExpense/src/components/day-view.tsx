@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Category, Expense, PaymentMethod } from "@/lib/types";
@@ -138,9 +139,16 @@ export function DayView({ date }: { date: string }) {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Day total
               </p>
-              <p className="mt-1 text-3xl font-bold tabular-nums">
+              {/* Keyed by value: gentle tick whenever the total changes. */}
+              <motion.p
+                key={dayTotal}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="mt-1 text-3xl font-bold tabular-nums"
+              >
                 {formatMoney(dayTotal)}
-              </p>
+              </motion.p>
             </CardContent>
           </Card>
 
@@ -171,8 +179,17 @@ export function DayView({ date }: { date: string }) {
           ) : (
             <Card className="py-0">
               <ul className="divide-y">
-                {expenses.map((exp) => (
-                  <li key={exp.id} className="flex items-center gap-3 px-4 py-3">
+                <AnimatePresence initial={false}>
+                  {expenses.map((exp) => (
+                    <motion.li
+                      key={exp.id}
+                      layout
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -24 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
                       style={{ backgroundColor: `${exp.categories?.color}22` }}
@@ -220,8 +237,9 @@ export function DayView({ date }: { date: string }) {
                         <Trash2 />
                       </Button>
                     </div>
-                  </li>
-                ))}
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
               </ul>
             </Card>
           )}

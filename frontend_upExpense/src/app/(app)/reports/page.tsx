@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
@@ -42,6 +43,20 @@ type Tab = "month" | "year";
 const chartConfig = {
   total: { label: "Spent", color: "var(--primary)" },
 } satisfies ChartConfig;
+
+/* Page-load choreography: sections rise in one after another. */
+const staggerParent = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07 } },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 12 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.3, ease: "easeOut" as const },
+  },
+};
 
 /** Tooltip row: single series, so name is fixed — value in money format. */
 function moneyTooltipRow(value: unknown) {
@@ -153,47 +168,61 @@ function MonthReport({ month }: { month: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <StatTiles
-        tiles={[
-          { label: `${MONTH_NAMES[mm - 1]} total`, value: formatMoney(total) },
-          { label: "Expenses", value: String(txCount) },
-          {
-            label: "Daily average",
-            value: formatMoney(total / daysInMonth),
-          },
-        ]}
-      />
+    <motion.div
+      className="space-y-6"
+      variants={staggerParent}
+      initial="hidden"
+      animate="show"
+    >
+      <motion.div variants={fadeUp}>
+        <StatTiles
+          tiles={[
+            {
+              label: `${MONTH_NAMES[mm - 1]} total`,
+              value: formatMoney(total),
+            },
+            { label: "Expenses", value: String(txCount) },
+            {
+              label: "Daily average",
+              value: formatMoney(total / daysInMonth),
+            },
+          ]}
+        />
+      </motion.div>
 
       {total === 0 ? (
-        <EmptyState />
+        <motion.div variants={fadeUp}>
+          <EmptyState />
+        </motion.div>
       ) : (
         <>
-          <section>
+          <motion.section variants={fadeUp}>
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
               By category
             </h2>
             <CategoryBars cats={cats} total={total} month={month} />
-          </section>
+          </motion.section>
 
-          <Card className="gap-0 py-0">
-            <CardHeader className="border-b !py-4">
-              <CardTitle>Daily spending</CardTitle>
-              <CardDescription>
-                {MONTH_NAMES[mm - 1]} {yy}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-2 py-4 sm:px-6">
-              <DailyColumns
-                days={days}
-                month={month}
-                daysInMonth={daysInMonth}
-              />
-            </CardContent>
-          </Card>
+          <motion.div variants={fadeUp}>
+            <Card className="gap-0 py-0">
+              <CardHeader className="border-b !py-4">
+                <CardTitle>Daily spending</CardTitle>
+                <CardDescription>
+                  {MONTH_NAMES[mm - 1]} {yy}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-2 py-4 sm:px-6">
+                <DailyColumns
+                  days={days}
+                  month={month}
+                  daysInMonth={daysInMonth}
+                />
+              </CardContent>
+            </Card>
+          </motion.div>
         </>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -241,43 +270,54 @@ function YearReport({ year }: { year: number }) {
   }
 
   return (
-    <div className="space-y-6">
-      <StatTiles
-        tiles={[
-          { label: `${year} total`, value: formatMoney(total) },
-          { label: "Expenses", value: String(txCount) },
-          {
-            label: "Highest month",
-            value: topMonth
-              ? MONTH_NAMES[topMonth.month - 1].slice(0, 3)
-              : "—",
-          },
-        ]}
-      />
+    <motion.div
+      className="space-y-6"
+      variants={staggerParent}
+      initial="hidden"
+      animate="show"
+    >
+      <motion.div variants={fadeUp}>
+        <StatTiles
+          tiles={[
+            { label: `${year} total`, value: formatMoney(total) },
+            { label: "Expenses", value: String(txCount) },
+            {
+              label: "Highest month",
+              value: topMonth
+                ? MONTH_NAMES[topMonth.month - 1].slice(0, 3)
+                : "—",
+            },
+          ]}
+        />
+      </motion.div>
 
       {total === 0 ? (
-        <EmptyState />
+        <motion.div variants={fadeUp}>
+          <EmptyState />
+        </motion.div>
       ) : (
         <>
-          <Card className="gap-0 py-0">
-            <CardHeader className="border-b !py-4">
-              <CardTitle>Month by month</CardTitle>
-              <CardDescription>{year}</CardDescription>
-            </CardHeader>
-            <CardContent className="px-2 py-4 sm:px-6">
-              <MonthColumns months={months} />
-            </CardContent>
-          </Card>
+          <motion.div variants={fadeUp}>
+            <Card className="gap-0 py-0">
+              <CardHeader className="border-b !py-4">
+                <CardTitle>Month by month</CardTitle>
+                <CardDescription>{year}</CardDescription>
+              </CardHeader>
+              <CardContent className="px-2 py-4 sm:px-6">
+                <MonthColumns months={months} />
+              </CardContent>
+            </Card>
+          </motion.div>
 
-          <section>
+          <motion.section variants={fadeUp}>
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
               By category
             </h2>
             <CategoryBars cats={cats} total={total} year={year} />
-          </section>
+          </motion.section>
         </>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -375,22 +415,32 @@ function CategoryBars({
                 </span>
               </span>
               <span className="mt-1 block h-2 w-full overflow-hidden rounded-full bg-muted">
-                <span
+                <motion.span
                   className="block h-full rounded-full"
-                  style={{
-                    width: `${(value / max) * 100}%`,
-                    backgroundColor: c.color,
-                  }}
+                  style={{ backgroundColor: c.color }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(value / max) * 100}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
                 />
               </span>
             </button>
-            {open && (
-              <CategoryDrilldown
-                categoryId={c.category_id}
-                month={month}
-                year={year}
-              />
-            )}
+            <AnimatePresence initial={false}>
+              {open && (
+                <motion.div
+                  className="overflow-hidden"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  <CategoryDrilldown
+                    categoryId={c.category_id}
+                    month={month}
+                    year={year}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </li>
         );
       })}

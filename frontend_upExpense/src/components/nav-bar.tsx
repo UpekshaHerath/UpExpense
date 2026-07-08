@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { CalendarDays, ChartColumn, Tags } from "lucide-react";
 import { todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -89,12 +90,19 @@ export function BottomNav() {
               href={l.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+                "relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
                 active
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
+              {active && (
+                <motion.span
+                  layoutId="bottom-nav-active"
+                  className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                />
+              )}
               <l.Icon className="size-5" />
               {l.label}
             </Link>

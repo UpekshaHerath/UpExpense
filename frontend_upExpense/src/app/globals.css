@@ -185,6 +185,13 @@
     overflow-x: clip;
   }
 
+  /* Reserve the scrollbar gutter permanently. Otherwise the scrollbar
+     appears/disappears as page height changes between tabs, shifting the
+     centered content column sideways by the scrollbar width. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
   /* Tailwind v4 preflight resets buttons to `cursor: default`. Restore the
      hand cursor on every enabled clickable, including Radix items that
      render as divs (menu items, select options). */

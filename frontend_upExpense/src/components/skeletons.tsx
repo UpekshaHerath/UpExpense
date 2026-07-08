@@ -8,30 +8,34 @@ export { Skeleton };
 export function DaySkeleton() {
   return (
     <div className="space-y-6" aria-busy aria-label="Loading day view">
-      {/* Day total card */}
+      {/* Day total card: centered label + 3xl amount */}
       <Card>
         <CardContent className="flex flex-col items-center gap-2 py-4">
           <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-9 w-44" />
         </CardContent>
       </Card>
 
-      {/* Entry form */}
+      {/* Entry form: title, amount field, category chips, note row, submit */}
       <Card>
-        <CardContent className="space-y-3 pt-4">
+        <CardContent className="space-y-3">
           <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full rounded-md" />
           <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-20 rounded-full" />
+            {[20, 24, 16, 28, 20, 24].map((w, i) => (
+              <Skeleton
+                key={i}
+                className="h-7 rounded-full"
+                style={{ width: `${w * 4}px` }}
+              />
             ))}
           </div>
           <div className="flex gap-2">
-            <Skeleton className="h-9 flex-1" />
-            <Skeleton className="h-9 w-14" />
-            <Skeleton className="h-9 w-14" />
+            <Skeleton className="h-9 flex-1 rounded-md" />
+            <Skeleton className="h-9 w-16 rounded-md" />
+            <Skeleton className="h-9 w-16 rounded-md" />
           </div>
-          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full rounded-md" />
         </CardContent>
       </Card>
 
