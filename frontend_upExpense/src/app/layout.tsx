@@ -12,9 +12,49 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Absolute base for OG/Twitter image URLs. Crawlers reject relative paths, so
+// resolve a real origin: explicit env → Vercel's production domain → localhost.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
+const title = "upExpense";
+const description =
+  "Personal expense tracking — daily entries, reports, decisions.";
+
 export const metadata: Metadata = {
-  title: "upExpense",
-  description: "Personal expense tracking — daily entries, reports, decisions.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: title,
+    template: "%s · upExpense",
+  },
+  description,
+  applicationName: title,
+  keywords: [
+    "expense tracker",
+    "personal finance",
+    "budgeting",
+    "spending reports",
+    "daily expenses",
+  ],
+  authors: [{ name: "upExpense" }],
+  // og:image / twitter:image are injected automatically from
+  // app/opengraph-image.tsx — no need to list images here.
+  openGraph: {
+    type: "website",
+    siteName: title,
+    title,
+    description,
+    url: siteUrl,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
 };
 
 export default function RootLayout({
