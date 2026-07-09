@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { AuthField, AuthShell, PasswordInput } from "@/components/auth";
+import { BrandLoader } from "@/components/brand-loader";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
@@ -13,6 +14,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Stays true through the redirect so the branded loader covers the whole
+  // login → app transition (this component only unmounts once the app route
+  // renders).
+  const [redirecting, setRedirecting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,8 +40,15 @@ export default function LoginPage() {
       return;
     }
 
+    // Hold the branded loader for a beat so it always plays, then navigate.
+    setRedirecting(true);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     router.push("/");
     router.refresh();
+  }
+
+  if (redirecting) {
+    return <BrandLoader label="Loading your expenses…" />;
   }
 
   return (
