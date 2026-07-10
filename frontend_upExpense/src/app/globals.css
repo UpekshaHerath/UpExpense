@@ -274,8 +274,10 @@
   }
   /* No horizontal page scroll — stray overflow (charts, popovers) must not
      let the page pan sideways on touch. `clip` instead of `hidden` so no
-     scroll container is created and the sticky header keeps working. */
-  html,
+     scroll container is created and the sticky header keeps working.
+     Body only: `clip` on <html> makes Floating UI treat the root as a
+     scroll container, so Radix popovers (avatar menu) get the page scroll
+     offset subtracted from their fixed position and render off-screen. */
   body {
     overflow-x: clip;
   }
