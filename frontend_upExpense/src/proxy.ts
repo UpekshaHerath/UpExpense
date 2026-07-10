@@ -8,9 +8,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // All paths except static assets, images, and the public metadata image
-    // routes (OG/Twitter) — social crawlers fetch those unauthenticated, so
-    // they must skip the auth redirect.
-    "/((?!_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // All paths except static assets, images, the public metadata image
+    // routes (OG/Twitter), and PWA assets (manifest, service worker, offline
+    // page) — browsers fetch those unauthenticated, so they must skip the
+    // auth redirect.
+    "/((?!_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|manifest.webmanifest|sw.js|offline.html|apple-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
