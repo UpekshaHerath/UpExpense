@@ -9,6 +9,10 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     start_url: "/",
     display: "standalone",
+    // Desktop: draw our own title bar (see components/pwa-titlebar.tsx);
+    // only the OS close/minimize/maximize buttons overlay it. Falls back
+    // to plain standalone where WCO is unsupported.
+    display_override: ["window-controls-overlay", "standalone"],
     orientation: "portrait",
     background_color: "#ffffff",
     theme_color: "#059669",
