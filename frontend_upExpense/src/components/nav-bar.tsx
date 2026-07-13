@@ -34,8 +34,9 @@ function getLinks() {
 export function NavBar() {
   const pathname = usePathname();
 
+  // Sticky top offset = custom PWA title bar height; 0px in a browser tab.
   return (
-    <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-(--titlebar-h) z-10 border-b bg-background/80 backdrop-blur">
       <nav className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-4">
         <Link href={`/day/${todayISO()}`} aria-label="upExpense — today">
           <Logo markClassName="size-7" textClassName="text-base" />

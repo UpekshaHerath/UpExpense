@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { PwaRegister } from "@/components/pwa-register";
+import { PwaTitlebar } from "@/components/pwa-titlebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -62,10 +63,9 @@ export const viewport: Viewport = {
   // viewport-fit=cover lets the app draw behind notches/home bars when
   // installed; safe areas are handled via env(safe-area-inset-*).
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-    { color: "#ffffff" },
-  ],
+  // theme-color is set by the inline <head> script (and kept in sync by
+  // PwaTitlebar) so it follows the app's class-based theme, not the OS
+  // preference — it paints the installed app's window-controls strip.
 };
 
 export default function RootLayout({
@@ -83,11 +83,12 @@ export default function RootLayout({
         {/* Apply stored theme + accent before first paint — prevents flash. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);var a=localStorage.getItem("accent");if(a)document.documentElement.setAttribute("data-accent",a)}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);var m=document.createElement("meta");m.name="theme-color";m.content=d?"#0a0a0a":"#ffffff";document.head.appendChild(m);var a=localStorage.getItem("accent");if(a)document.documentElement.setAttribute("data-accent",a)}catch(e){}})()`,
           }}
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <PwaTitlebar />
         <PwaRegister />
         {children}
       </body>
