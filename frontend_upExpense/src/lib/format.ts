@@ -9,6 +9,19 @@ export function formatMoney(amount: number): string {
   return currencyFormatter.format(amount);
 }
 
+/** Money with an explicit +/− sign — for net balances (income − expense). */
+export function formatSignedMoney(amount: number): string {
+  const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
+  return `${sign}${currencyFormatter.format(Math.abs(amount))}`;
+}
+
+/** Tailwind text tone for a net balance: green up, red down, muted flat. */
+export function netToneClass(amount: number): string {
+  if (amount > 0) return "text-emerald-600 dark:text-emerald-400";
+  if (amount < 0) return "text-destructive";
+  return "text-muted-foreground";
+}
+
 /** Today's date in local time as YYYY-MM-DD. */
 export function todayISO(): string {
   return toISODate(new Date());

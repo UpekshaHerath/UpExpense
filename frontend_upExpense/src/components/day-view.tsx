@@ -5,11 +5,19 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { Category, Expense, PaymentMethod } from "@/lib/types";
+import type {
+  Category,
+  CategoryKind,
+  Expense,
+  Income,
+  PaymentMethod,
+} from "@/lib/types";
 import {
   addDays,
   formatDayHeading,
   formatMoney,
+  formatSignedMoney,
+  netToneClass,
   todayISO,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -17,9 +25,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/date-picker";
 import { DaySkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
+
+/** A day entry, normalised so expense and income rows render the same way. */
+type Entry = {
+  kind: CategoryKind;
+  item: Expense | Income;
+};
 
 export function DayView({ date }: { date: string }) {
   const router = useRouter();
@@ -27,25 +42,33 @@ export function DayView({ date }: { date: string }) {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Expense | null>(null);
+  const [mode, setMode] = useState<CategoryKind>("expense");
+  const [editing, setEditing] = useState<Entry | null>(null);
 
   // Component is keyed by date (see day/[date]/page.tsx), so this runs
   // once per date and initial state is always fresh.
   useEffect(() => {
     let ignore = false;
     (async () => {
-      const [catRes, expRes] = await Promise.all([
+      const [catRes, expRes, incRes] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase
           .from("expenses")
           .select("*, categories(*)")
           .eq("expense_date", date)
           .order("created_at"),
+        supabase
+          .from("incomes")
+          .select("*, categories(*)")
+          .eq("income_date", date)
+          .order("created_at"),
       ]);
       if (ignore) return;
       if (catRes.data) setCategories(catRes.data);
       if (expRes.data) setExpenses(expRes.data);
+      if (incRes.data) setIncomes(incRes.data);
       setLoading(false);
     })();
     return () => {
@@ -54,15 +77,48 @@ export function DayView({ date }: { date: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const dayTotal = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const spent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const earned = incomes.reduce((sum, i) => sum + Number(i.amount), 0);
+  const net = earned - spent;
 
-  async function handleDelete(exp: Expense) {
+  const modeCategories = categories.filter((c) => c.kind === mode);
+  const entries: Entry[] =
+    mode === "expense"
+      ? expenses.map((item) => ({ kind: "expense", item }))
+      : incomes.map((item) => ({ kind: "income", item }));
+
+  async function handleDelete(entry: Entry) {
+    const { kind, item } = entry;
     // Optimistic: remove now, restore on failure.
-    setExpenses((prev) => prev.filter((e) => e.id !== exp.id));
-    const { error } = await supabase.from("expenses").delete().eq("id", exp.id);
+    if (kind === "expense") {
+      setExpenses((prev) => prev.filter((e) => e.id !== item.id));
+    } else {
+      setIncomes((prev) => prev.filter((e) => e.id !== item.id));
+    }
+    const table = kind === "expense" ? "expenses" : "incomes";
+    const { error } = await supabase.from(table).delete().eq("id", item.id);
     if (error) {
-      setExpenses((prev) => [...prev, exp]);
+      if (kind === "expense") {
+        setExpenses((prev) => [...prev, item as Expense]);
+      } else {
+        setIncomes((prev) => [...prev, item as Income]);
+      }
       alert(`Delete failed: ${error.message}`);
+    }
+  }
+
+  function handleSaved(saved: Expense | Income, isEdit: boolean) {
+    setEditing(null);
+    if (mode === "expense") {
+      const e = saved as Expense;
+      setExpenses((prev) =>
+        isEdit ? prev.map((x) => (x.id === e.id ? e : x)) : [...prev, e]
+      );
+    } else {
+      const i = saved as Income;
+      setIncomes((prev) =>
+        isEdit ? prev.map((x) => (x.id === i.id ? i : x)) : [...prev, i]
+      );
     }
   }
 
@@ -133,111 +189,74 @@ export function DayView({ date }: { date: string }) {
         <DaySkeleton />
       ) : (
         <>
-          {/* Day total */}
-          <Card>
-            <CardContent className="py-4 text-center">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Day total
-              </p>
-              {/* Keyed by value: gentle tick whenever the total changes. */}
-              <motion.p
-                key={dayTotal}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="mt-1 text-3xl font-bold tabular-nums"
-              >
-                {formatMoney(dayTotal)}
-              </motion.p>
+          {/* Day summary — earned, spent, net */}
+          <Card className="py-0">
+            <CardContent className="grid grid-cols-3 divide-x p-0">
+              <DaySummaryCell label="Earned" value={formatMoney(earned)} />
+              <DaySummaryCell label="Spent" value={formatMoney(spent)} />
+              <DaySummaryCell
+                label="Net"
+                value={formatSignedMoney(net)}
+                tone={netToneClass(net)}
+              />
             </CardContent>
           </Card>
 
-          {/* Entry form */}
-          <ExpenseForm
-            key={editing?.id ?? "new"}
-            date={date}
-            categories={categories}
-            editing={editing}
-            onSaved={(saved, isEdit) => {
+          {/* Expense / Income switch */}
+          <Tabs
+            value={mode}
+            onValueChange={(v) => {
               setEditing(null);
-              setExpenses((prev) =>
-                isEdit
-                  ? prev.map((e) => (e.id === saved.id ? saved : e))
-                  : [...prev, saved]
-              );
+              setMode(v as CategoryKind);
             }}
+          >
+            <TabsList className="w-full">
+              <TabsTrigger value="expense" className="flex-1">
+                Expense
+              </TabsTrigger>
+              <TabsTrigger value="income" className="flex-1">
+                Income
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Entry form (keyed by mode + edit target for fresh state) */}
+          <EntryForm
+            key={`${mode}-${editing?.item.id ?? "new"}`}
+            kind={mode}
+            date={date}
+            categories={modeCategories}
+            editing={editing && editing.kind === mode ? editing.item : null}
+            onSaved={handleSaved}
             onCancelEdit={() => setEditing(null)}
           />
 
-          {/* Expense list */}
-          {expenses.length === 0 ? (
+          {/* Entry list */}
+          {entries.length === 0 ? (
             <EmptyState
-              icon="🌱"
-              title="No expenses on this day"
-              hint="Add one above — amount, tap a category, done."
+              icon={mode === "expense" ? "🌱" : "💰"}
+              title={
+                mode === "expense"
+                  ? "No expenses on this day"
+                  : "No income on this day"
+              }
+              hint={
+                mode === "expense"
+                  ? "Add one above — amount, tap a category, done."
+                  : "Add salary, business, or any money in."
+              }
             />
           ) : (
             <Card className="py-0">
               <ul className="divide-y">
                 <AnimatePresence initial={false}>
-                  {expenses.map((exp) => (
-                    <motion.li
-                      key={exp.id}
-                      layout
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -24 }}
-                      transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="flex items-center gap-3 px-4 py-3"
-                    >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
-                      style={{ backgroundColor: `${exp.categories?.color}22` }}
-                    >
-                      {exp.categories?.icon ?? "💸"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {exp.categories?.name ?? "—"}
-                        {exp.payment_method && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-2 text-[10px] uppercase"
-                          >
-                            {exp.payment_method}
-                          </Badge>
-                        )}
-                      </p>
-                      {exp.note && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {exp.note}
-                        </p>
-                      )}
-                    </div>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {formatMoney(Number(exp.amount))}
-                    </p>
-                    <div className="flex gap-0.5">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(exp)}
-                        aria-label="Edit expense"
-                        className="text-muted-foreground"
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(exp)}
-                        aria-label="Delete expense"
-                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                    </motion.li>
+                  {entries.map((entry) => (
+                    <EntryRow
+                      key={entry.item.id}
+                      entry={entry}
+                      onEdit={() => setEditing(entry)}
+                      onDelete={() => handleDelete(entry)}
+                    />
                   ))}
                 </AnimatePresence>
               </ul>
@@ -249,21 +268,127 @@ export function DayView({ date }: { date: string }) {
   );
 }
 
-function ExpenseForm({
+function DaySummaryCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="px-2 py-3 text-center">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <motion.p
+        key={value}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className={cn(
+          "mt-1 truncate text-sm font-bold tabular-nums sm:text-base",
+          tone
+        )}
+      >
+        {value}
+      </motion.p>
+    </div>
+  );
+}
+
+function EntryRow({
+  entry,
+  onEdit,
+  onDelete,
+}: {
+  entry: Entry;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { kind, item } = entry;
+  const payment = kind === "expense" ? (item as Expense).payment_method : null;
+
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -24 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="flex items-center gap-3 px-4 py-3"
+    >
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
+        style={{ backgroundColor: `${item.categories?.color}22` }}
+      >
+        {item.categories?.icon ?? (kind === "income" ? "💰" : "💸")}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {item.categories?.name ?? "—"}
+          {payment && (
+            <Badge variant="secondary" className="ml-2 text-[10px] uppercase">
+              {payment}
+            </Badge>
+          )}
+        </p>
+        {item.note && (
+          <p className="truncate text-xs text-muted-foreground">{item.note}</p>
+        )}
+      </div>
+      <p
+        className={cn(
+          "text-sm font-semibold tabular-nums",
+          kind === "income" && "text-emerald-600 dark:text-emerald-400"
+        )}
+      >
+        {kind === "income" ? "+" : ""}
+        {formatMoney(Number(item.amount))}
+      </p>
+      <div className="flex gap-0.5">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onEdit}
+          aria-label={`Edit ${kind}`}
+          className="text-muted-foreground"
+        >
+          <Pencil />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onDelete}
+          aria-label={`Delete ${kind}`}
+          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 />
+        </Button>
+      </div>
+    </motion.li>
+  );
+}
+
+function EntryForm({
+  kind,
   date,
   categories,
   editing,
   onSaved,
   onCancelEdit,
 }: {
+  kind: CategoryKind;
   date: string;
   categories: Category[];
-  editing: Expense | null;
-  onSaved: (saved: Expense, isEdit: boolean) => void;
+  editing: Expense | Income | null;
+  onSaved: (saved: Expense | Income, isEdit: boolean) => void;
   onCancelEdit: () => void;
 }) {
   const supabase = createClient();
   const amountRef = useRef<HTMLInputElement>(null);
+  const isIncome = kind === "income";
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   const [categoryId, setCategoryId] = useState<string | null>(
@@ -271,7 +396,9 @@ function ExpenseForm({
   );
   const [note, setNote] = useState(editing?.note ?? "");
   const [payment, setPayment] = useState<PaymentMethod | null>(
-    editing?.payment_method ?? null
+    editing && "payment_method" in editing
+      ? (editing.payment_method ?? null)
+      : null
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,24 +417,39 @@ function ExpenseForm({
       return;
     }
     if (!categoryId) {
-      setError("Pick a category.");
+      setError(isIncome ? "Pick a source." : "Pick a category.");
       return;
     }
 
     setSaving(true);
-    const payload = {
-      amount: value,
-      category_id: categoryId,
-      note: note.trim() || null,
-      payment_method: payment,
-      expense_date: date,
+    const trimmedNote = note.trim() || null;
+
+    // Branch on kind so each table gets its own concretely-typed payload.
+    const run = () => {
+      if (isIncome) {
+        const payload = {
+          amount: value,
+          category_id: categoryId,
+          note: trimmedNote,
+          income_date: date,
+        };
+        return editing
+          ? supabase.from("incomes").update(payload).eq("id", editing.id)
+          : supabase.from("incomes").insert(payload);
+      }
+      const payload = {
+        amount: value,
+        category_id: categoryId,
+        note: trimmedNote,
+        payment_method: payment,
+        expense_date: date,
+      };
+      return editing
+        ? supabase.from("expenses").update(payload).eq("id", editing.id)
+        : supabase.from("expenses").insert(payload);
     };
 
-    const query = editing
-      ? supabase.from("expenses").update(payload).eq("id", editing.id)
-      : supabase.from("expenses").insert(payload);
-
-    const { data, error: dbError } = await query
+    const { data, error: dbError } = await run()
       .select("*, categories(*)")
       .single();
 
@@ -317,19 +459,21 @@ function ExpenseForm({
       return;
     }
 
-    onSaved(data as Expense, !!editing);
+    onSaved(data as Expense | Income, !!editing);
     setAmount("");
     setNote("");
     setPayment(null);
     amountRef.current?.focus();
   }
 
+  const verb = isIncome ? "income" : "expense";
+
   return (
     <Card>
       <CardContent className="space-y-3">
         <form onSubmit={handleSubmit} className="space-y-3">
           <p className="text-sm font-semibold">
-            {editing ? "Edit expense" : "Add expense"}
+            {editing ? `Edit ${verb}` : `Add ${verb}`}
           </p>
 
           <div className="relative">
@@ -350,7 +494,7 @@ function ExpenseForm({
             />
           </div>
 
-          {/* Category chips — tap to select (PRD EXP-5) */}
+          {/* Category / source chips — tap to select */}
           <div className="flex flex-wrap gap-1.5">
             {categories.map((c) => (
               <button
@@ -363,9 +507,7 @@ function ExpenseForm({
                     ? "border-transparent text-white"
                     : "text-muted-foreground hover:bg-muted"
                 )}
-                style={
-                  categoryId === c.id ? { backgroundColor: c.color } : {}
-                }
+                style={categoryId === c.id ? { backgroundColor: c.color } : {}}
               >
                 {c.icon} {c.name}
               </button>
@@ -380,18 +522,20 @@ function ExpenseForm({
               onChange={(e) => setNote(e.target.value)}
               className="flex-1"
             />
-            {(["cash", "card"] as const).map((m) => (
-              <Button
-                key={m}
-                type="button"
-                variant={payment === m ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPayment(payment === m ? null : m)}
-                className="h-9 text-xs uppercase"
-              >
-                {m}
-              </Button>
-            ))}
+            {/* Payment method applies to expenses only. */}
+            {!isIncome &&
+              (["cash", "card"] as const).map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  variant={payment === m ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPayment(payment === m ? null : m)}
+                  className="h-9 text-xs uppercase"
+                >
+                  {m}
+                </Button>
+              ))}
           </div>
 
           {error && (
@@ -402,7 +546,7 @@ function ExpenseForm({
 
           <div className="flex gap-2">
             <Button type="submit" disabled={saving} className="h-10 flex-1">
-              {saving ? "Saving…" : editing ? "Save changes" : "Add expense"}
+              {saving ? "Saving…" : editing ? "Save changes" : `Add ${verb}`}
             </Button>
             {editing && (
               <Button

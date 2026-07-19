@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { Category } from "@/lib/types";
+import type { Category, CategoryKind } from "@/lib/types";
 import { ColorPicker } from "@/components/color-picker";
 import { IconPicker } from "@/components/icon-picker";
 import { ListSkeleton } from "@/components/skeletons";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +23,20 @@ import { Card } from "@/components/ui/card";
 import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+/** The non-deletable fallback category each kind reassigns orphans to. */
+const FALLBACK_NAME: Record<CategoryKind, string> = {
+  expense: "Other",
+  income: "Other Income",
+};
+
 export default function CategoriesPage() {
   const supabase = createClient();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Which side we're managing.
+  const [kind, setKind] = useState<CategoryKind>("expense");
 
   // Add form
   const [newName, setNewName] = useState("");
@@ -67,7 +77,7 @@ export default function CategoriesPage() {
 
     const { data, error: dbError } = await supabase
       .from("categories")
-      .insert({ name, color: newColor, icon: newIcon || null })
+      .insert({ name, color: newColor, icon: newIcon || null, kind })
       .select()
       .single();
 
@@ -117,17 +127,21 @@ export default function CategoriesPage() {
     setDeleting(null);
     setError(null);
 
+    const fallbackName = FALLBACK_NAME[cat.kind];
     const other = categories.find(
-      (c) => c.name === "Other" && c.id !== cat.id
+      (c) => c.kind === cat.kind && c.name === fallbackName && c.id !== cat.id
     );
     if (!other) {
-      setError('Cannot delete: no "Other" category to reassign expenses to.');
+      setError(
+        `Cannot delete: no "${fallbackName}" category to reassign to.`
+      );
       return;
     }
 
-    // PRD CAT-4: reassign expenses to "Other" before deleting — never orphan.
+    // PRD CAT-4: reassign entries to the fallback before deleting — never orphan.
+    const table = cat.kind === "income" ? "incomes" : "expenses";
     const { error: moveError } = await supabase
-      .from("expenses")
+      .from(table)
       .update({ category_id: other.id })
       .eq("category_id", cat.id);
     if (moveError) {
@@ -146,21 +160,40 @@ export default function CategoriesPage() {
     setCategories((prev) => prev.filter((c) => c.id !== cat.id));
   }
 
+  const shown = categories.filter((c) => c.kind === kind);
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">Categories</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold">Categories</h1>
+        <Tabs
+          value={kind}
+          onValueChange={(v) => {
+            setError(null);
+            setEditId(null);
+            setKind(v as CategoryKind);
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="expense">Expense</TabsTrigger>
+            <TabsTrigger value="income">Income</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       <Card>
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
             <Input
               type="text"
-              placeholder="New category name"
+              placeholder={
+                kind === "income" ? "New income source" : "New category name"
+              }
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               className="min-w-0 flex-1"
             />
-            <IconPicker value={newIcon} onChange={setNewIcon} />
+            <IconPicker value={newIcon} onChange={setNewIcon} kind={kind} />
             <ColorPicker value={newColor} onChange={setNewColor} />
             <Button type="submit">Add</Button>
           </form>
@@ -178,14 +211,18 @@ export default function CategoriesPage() {
       ) : (
         <Card className="py-0">
           <ul className="divide-y">
-            {categories.map((cat) => (
+            {shown.map((cat) => (
               <li
                 key={cat.id}
                 className="flex flex-wrap items-center gap-3 px-4 py-3"
               >
                 {editId === cat.id ? (
                   <>
-                    <IconPicker value={editIcon} onChange={setEditIcon} />
+                    <IconPicker
+                      value={editIcon}
+                      onChange={setEditIcon}
+                      kind={cat.kind}
+                    />
                     <ColorPicker value={editColor} onChange={setEditColor} />
                     <Input
                       type="text"
@@ -242,7 +279,7 @@ export default function CategoriesPage() {
                     >
                       <Pencil />
                     </Button>
-                    {cat.name !== "Other" && (
+                    {cat.name !== FALLBACK_NAME[cat.kind] && (
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -271,8 +308,9 @@ export default function CategoriesPage() {
               Delete &quot;{deleting?.name}&quot;?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Its expenses will be moved to the &quot;Other&quot; category.
-              This cannot be undone.
+              Its entries will be moved to the &quot;
+              {deleting ? FALLBACK_NAME[deleting.kind] : "Other"}&quot;
+              category. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

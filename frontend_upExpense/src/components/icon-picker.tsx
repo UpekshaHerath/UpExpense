@@ -7,10 +7,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import type { CategoryKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // Curated, expense-relevant icons — grouped roughly by theme.
-const ICONS = [
+const EXPENSE_ICONS = [
   // Transport & vehicle
   "⛽", "🚗", "🏍️", "🔧", "🛞", "🚌", "🚕", "✈️",
   // Food & drink
@@ -25,14 +26,29 @@ const ICONS = [
   "🎁", "📚", "🎓", "🐕", "💳", "🧾", "💰", "📦",
 ];
 
+// Curated, income-relevant icons — grouped roughly by source.
+const INCOME_ICONS = [
+  // Work & business
+  "💼", "🏢", "🧑‍💻", "🛠️", "📊", "🤝", "🧾", "🏦",
+  // Investments & returns
+  "📈", "💹", "🪙", "🏘️", "🏠", "💵", "🧧", "🎯",
+  // Rewards & extras
+  "🎁", "🏆", "🎉", "💸", "🪃", "🔄", "🧮", "⭐",
+  // Money & misc
+  "💰", "💳", "🤑", "🐷", "💎", "🍀", "📥", "➕",
+];
+
 export function IconPicker({
   value,
   onChange,
+  kind = "expense",
 }: {
   value: string;
   onChange: (icon: string) => void;
+  kind?: CategoryKind;
 }) {
   const [open, setOpen] = useState(false);
+  const icons = kind === "income" ? INCOME_ICONS : EXPENSE_ICONS;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -49,7 +65,7 @@ export function IconPicker({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-2">
         <div className="grid grid-cols-8 gap-0.5">
-          {ICONS.map((icon) => (
+          {icons.map((icon) => (
             <Button
               key={icon}
               type="button"

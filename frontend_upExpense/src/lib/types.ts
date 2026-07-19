@@ -1,3 +1,5 @@
+export type CategoryKind = "expense" | "income";
+
 export type Category = {
   id: string;
   user_id: string;
@@ -5,6 +7,7 @@ export type Category = {
   color: string;
   icon: string | null;
   is_default: boolean;
+  kind: CategoryKind;
 };
 
 export type PaymentMethod = "cash" | "card";
@@ -17,6 +20,17 @@ export type Expense = {
   note: string | null;
   payment_method: PaymentMethod | null;
   expense_date: string; // YYYY-MM-DD
+  created_at: string;
+  categories?: Category | null;
+};
+
+export type Income = {
+  id: string;
+  user_id: string;
+  category_id: string;
+  amount: number;
+  note: string | null;
+  income_date: string; // YYYY-MM-DD
   created_at: string;
   categories?: Category | null;
 };
