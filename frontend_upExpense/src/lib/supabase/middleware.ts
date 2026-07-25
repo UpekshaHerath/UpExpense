@@ -1,7 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup"];
+// Paths reachable without a session.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth"];
+
+// Paths a signed-in user should be bounced away from (to the app). Note this
+// is NOT all of PUBLIC_PATHS: the `/auth/*` routes are transient OAuth
+// machinery (callback, post-login interstitial) that an already-authenticated
+// request must be allowed to pass through.
+const SIGNED_IN_REDIRECT_PATHS = ["/login", "/signup"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -42,7 +49,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublic) {
+  if (user && SIGNED_IN_REDIRECT_PATHS.some((p) => path.startsWith(p))) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

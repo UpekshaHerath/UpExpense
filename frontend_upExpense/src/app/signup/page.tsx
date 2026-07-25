@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { AuthField, AuthShell, PasswordInput } from "@/components/auth";
+import {
+  AuthDivider,
+  AuthField,
+  AuthShell,
+  PasswordInput,
+} from "@/components/auth";
+import { GoogleButton } from "@/components/google-button";
 import { Button } from "@/components/ui/button";
 
 export default function SignupPage() {
@@ -76,6 +82,9 @@ export default function SignupPage() {
       title="Create your account"
       subtitle="Track daily expenses. Understand your year."
     >
+      <GoogleButton next="/" />
+      <AuthDivider label="or sign up with email" />
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthField
           id="username"
