@@ -1,18 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { AuthField, AuthShell, PasswordInput } from "@/components/auth";
+import {
+  AuthDivider,
+  AuthField,
+  AuthShell,
+  PasswordInput,
+} from "@/components/auth";
 import { BrandLoader } from "@/components/brand-loader";
+import { GoogleButton } from "@/components/google-button";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Surface a failed Google round-trip (/auth/callback → ?error=oauth).
+  // Derived from the URL during render — `useSearchParams` is SSR-safe, so
+  // server and client agree (no hydration mismatch, no setState-in-effect).
+  // A password-submit error takes precedence once one is set.
+  const shownError =
+    error ??
+    (searchParams.get("error") === "oauth"
+      ? "Google sign-in failed. Please try again."
+      : null);
   const [loading, setLoading] = useState(false);
   // Stays true through the redirect so the branded loader covers the whole
   // login → app transition (this component only unmounts once the app route
@@ -56,6 +72,9 @@ export default function LoginPage() {
       title="Welcome back"
       subtitle="Log in to keep tracking your expenses."
     >
+      <GoogleButton next="/" />
+      <AuthDivider label="or continue with email" />
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthField
           id="email"
@@ -75,9 +94,9 @@ export default function LoginPage() {
           autoComplete="current-password"
         />
 
-        {error && (
+        {shownError && (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
+            {shownError}
           </p>
         )}
 
@@ -98,5 +117,16 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+// `useSearchParams` (used in LoginForm to surface the OAuth error) requires a
+// Suspense boundary — without it the page would be forced to client-only
+// rendering.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<BrandLoader label="Loading…" />}>
+      <LoginForm />
+    </Suspense>
   );
 }
