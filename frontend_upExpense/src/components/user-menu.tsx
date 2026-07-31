@@ -7,6 +7,7 @@ import {
   Camera,
   ChevronDown,
   Clock,
+  Crop,
   Loader2,
   LogOut,
   Mail,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,14 +41,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsDialog } from "@/components/settings-dialog";
+import {
+  AvatarCropper,
+  DEFAULT_CROP,
+  type CropTransform,
+} from "@/components/avatar-cropper";
 
 const AVATAR_BUCKET = "avatars";
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
+// The editor re-encodes to a small square, so the *input* can be generous —
+// phone cameras routinely produce 5–8 MB shots.
+const MAX_AVATAR_BYTES = 10 * 1024 * 1024; // 10 MB
 const ACCEPTED_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
+
+/** The custom picture, its untouched source, and how it was framed. */
+type AvatarState = {
+  url: string | null;
+  originalUrl: string | null;
+  crop: CropTransform | null;
+};
+
+const EMPTY_AVATAR: AvatarState = { url: null, originalUrl: null, crop: null };
 
 /** Google-provided photo, if this account signed in with Google. */
 function metadataAvatar(user: User): string | null {
@@ -80,9 +98,7 @@ function UserAvatar({
 }) {
   return (
     <Avatar className={className}>
-      {src && (
-        <AvatarImage src={src} alt="" referrerPolicy="no-referrer" />
-      )}
+      {src && <AvatarImage src={src} alt="" referrerPolicy="no-referrer" />}
       <AvatarFallback className={fallbackClassName}>{letter}</AvatarFallback>
     </Avatar>
   );
@@ -93,8 +109,8 @@ export function UserMenu() {
   const supabase = createClient();
 
   const [user, setUser] = useState<User | null>(null);
-  // Custom uploaded avatar (profiles.avatar_url); null once loaded with none.
-  const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+  // Custom uploaded avatar (profiles.avatar_*); empty once loaded with none.
+  const [avatar, setAvatar] = useState<AvatarState>(EMPTY_AVATAR);
   const [signingOut, setSigningOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -108,12 +124,33 @@ export function UserMenu() {
       if (ignore || !user) return;
       setUser(user);
 
-      const { data: profile } = await supabase
+      const full = await supabase
         .from("profiles")
-        .select("avatar_url")
+        .select("avatar_url, avatar_original_url, avatar_crop")
         .eq("id", user.id)
         .single();
-      if (!ignore) setCustomAvatar(profile?.avatar_url ?? null);
+      let profile: {
+        avatar_url?: string | null;
+        avatar_original_url?: string | null;
+        avatar_crop?: CropTransform | null;
+      } | null = full.data;
+      // Migration 006 adds avatar_original_url/avatar_crop. Until it runs the
+      // select 400s, so fall back to the 005 shape rather than dropping the
+      // user's picture — reframing simply stays unavailable.
+      if (full.error) {
+        const legacy = await supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", user.id)
+          .single();
+        profile = legacy.data;
+      }
+      if (ignore) return;
+      setAvatar({
+        url: profile?.avatar_url ?? null,
+        originalUrl: profile?.avatar_original_url ?? null,
+        crop: (profile?.avatar_crop as CropTransform | null) ?? null,
+      });
     })();
     return () => {
       ignore = true;
@@ -140,7 +177,7 @@ export function UserMenu() {
   const letter = username[0]?.toUpperCase() ?? "?";
 
   // Custom upload wins; otherwise fall back to the Google photo, then letter.
-  const avatarUrl = customAvatar ?? metadataAvatar(user);
+  const avatarUrl = avatar.url ?? metadataAvatar(user);
 
   return (
     <>
@@ -222,9 +259,9 @@ export function UserMenu() {
         user={user}
         username={username}
         letter={letter}
-        avatarUrl={avatarUrl}
-        hasCustomAvatar={!!customAvatar}
-        onCustomAvatarChange={setCustomAvatar}
+        displayAvatar={avatarUrl}
+        avatar={avatar}
+        onAvatarChange={setAvatar}
         open={profileOpen}
         onOpenChange={setProfileOpen}
       />
@@ -246,18 +283,19 @@ function ProfileDialog({
   user,
   username,
   letter,
-  avatarUrl,
-  hasCustomAvatar,
-  onCustomAvatarChange,
+  displayAvatar,
+  avatar,
+  onAvatarChange,
   open,
   onOpenChange,
 }: {
   user: User;
   username: string;
   letter: string;
-  avatarUrl: string | null;
-  hasCustomAvatar: boolean;
-  onCustomAvatarChange: (url: string | null) => void;
+  /** What the UI actually shows — custom upload, else the Google photo. */
+  displayAvatar: string | null;
+  avatar: AvatarState;
+  onAvatarChange: (next: AvatarState) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -265,76 +303,155 @@ function ProfileDialog({
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same file
-    if (!file) return;
+  // What the cropper is editing: a freshly picked file (we own the object
+  // URL and must revoke it) or the stored original being reframed.
+  const [editing, setEditing] = useState<{
+    src: string;
+    file: File | null;
+    initial: CropTransform;
+  } | null>(null);
 
+  useEffect(() => {
+    // Revoke the object URL of the previous session, never the current one.
+    return () => {
+      if (editing?.file) URL.revokeObjectURL(editing.src);
+    };
+  }, [editing]);
+
+  function startEditing(file: File) {
     setError(null);
-    const ext = ACCEPTED_TYPES[file.type];
-    if (!ext) {
+    if (!ACCEPTED_TYPES[file.type]) {
       setError("Use a PNG, JPG, or WebP image.");
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      setError("Image must be 2 MB or smaller.");
+      setError("Image must be 10 MB or smaller.");
       return;
     }
+    setEditing({
+      src: URL.createObjectURL(file),
+      file,
+      initial: DEFAULT_CROP,
+    });
+  }
 
-    setBusy(true);
-    const prevPath = storagePathFromUrl(hasCustomAvatar ? avatarUrl : null);
-    const path = `${user.id}/${Date.now()}.${ext}`;
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (file) startEditing(file);
+  }
 
-    const { error: upErr } = await supabase.storage
-      .from(AVATAR_BUCKET)
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (upErr) {
-      setError(upErr.message);
-      setBusy(false);
-      return;
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) startEditing(file);
+  }
+
+  /** Reframe the stored original — always cuts from full resolution, so
+   *  adjusting twice never compounds quality loss. */
+  function startReadjust() {
+    if (!avatar.originalUrl) return;
+    setError(null);
+    setEditing({
+      src: avatar.originalUrl,
+      file: null,
+      initial: avatar.crop ?? DEFAULT_CROP,
+    });
+  }
+
+  /** Upload the crop (and, for a new pick, its original), then repoint the
+   *  profile row and bin the files it replaced. Throws so the cropper can
+   *  surface the message inline. */
+  async function saveCrop(cropped: Blob, transform: CropTransform) {
+    const source = editing?.file ?? null;
+    const stamp = Date.now();
+    const storage = supabase.storage.from(AVATAR_BUCKET);
+
+    const stalePaths = [storagePathFromUrl(avatar.url)];
+    let originalUrl = avatar.originalUrl;
+    let originalPath: string | null = null;
+
+    if (source) {
+      stalePaths.push(storagePathFromUrl(avatar.originalUrl));
+      const ext = ACCEPTED_TYPES[source.type];
+      originalPath = `${user.id}/original-${stamp}.${ext}`;
+      const { error: upErr } = await storage.upload(originalPath, source, {
+        upsert: true,
+        contentType: source.type,
+      });
+      if (upErr) throw new Error(upErr.message);
+      originalUrl = storage.getPublicUrl(originalPath).data.publicUrl;
     }
 
-    const publicUrl = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path)
-      .data.publicUrl;
+    // toBlob falls back to PNG where WebP encoding is unavailable.
+    const cropExt = cropped.type === "image/png" ? "png" : "webp";
+    const cropPath = `${user.id}/avatar-${stamp}.${cropExt}`;
+    const { error: cropErr } = await storage.upload(cropPath, cropped, {
+      upsert: true,
+      contentType: cropped.type || "image/webp",
+    });
+    if (cropErr) throw new Error(cropErr.message);
+    const publicUrl = storage.getPublicUrl(cropPath).data.publicUrl;
 
     const { error: dbErr } = await supabase
       .from("profiles")
-      .update({ avatar_url: publicUrl })
+      .update({
+        avatar_url: publicUrl,
+        avatar_original_url: originalUrl,
+        avatar_crop: transform,
+      })
       .eq("id", user.id);
     if (dbErr) {
-      setError(dbErr.message);
-      setBusy(false);
-      return;
+      // Same pre-006 fallback as the initial load: keep the new picture even
+      // when the columns that make it re-adjustable do not exist yet.
+      const { error: legacyErr } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", user.id);
+      if (legacyErr) throw new Error(legacyErr.message);
+      originalUrl = null;
+      // Nothing can reference the original we just uploaded — do not leave it.
+      if (originalPath) stalePaths.push(originalPath);
     }
 
-    // Best-effort cleanup of the previous custom image.
-    if (prevPath && prevPath !== path) {
-      await supabase.storage.from(AVATAR_BUCKET).remove([prevPath]);
-    }
+    // Best-effort cleanup of what we just replaced.
+    const dead = stalePaths.filter(
+      (p): p is string => !!p && p !== cropPath
+    );
+    if (dead.length) await storage.remove(dead);
 
-    onCustomAvatarChange(publicUrl);
-    setBusy(false);
+    onAvatarChange({ url: publicUrl, originalUrl, crop: transform });
+    setEditing(null);
   }
 
   async function handleRemove() {
     setError(null);
     setBusy(true);
-    const prevPath = storagePathFromUrl(avatarUrl);
+    const dead = [
+      storagePathFromUrl(avatar.url),
+      storagePathFromUrl(avatar.originalUrl),
+    ].filter((p): p is string => !!p);
 
     const { error: dbErr } = await supabase
       .from("profiles")
-      .update({ avatar_url: null })
+      .update({
+        avatar_url: null,
+        avatar_original_url: null,
+        avatar_crop: null,
+      })
       .eq("id", user.id);
     if (dbErr) {
       setError(dbErr.message);
       setBusy(false);
       return;
     }
-    if (prevPath) {
-      await supabase.storage.from(AVATAR_BUCKET).remove([prevPath]);
+    if (dead.length) {
+      await supabase.storage.from(AVATAR_BUCKET).remove(dead);
     }
-    onCustomAvatarChange(null);
+    onAvatarChange(EMPTY_AVATAR);
     setBusy(false);
   }
 
@@ -371,102 +488,157 @@ function ProfileDialog({
     },
   ];
 
+  const hasCustomAvatar = !!avatar.url;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="gap-0 overflow-hidden p-0 sm:max-w-sm"
-        showCloseButton={false}
-      >
-        {/* Cover band — avatar overlaps it below */}
-        <div className="h-24 bg-gradient-to-br from-primary via-primary/80 to-primary/50" />
-        <DialogClose asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="absolute top-2 right-2 text-primary-foreground/80 hover:bg-white/15 hover:text-primary-foreground"
-          >
-            <X />
-            <span className="sr-only">Close</span>
-          </Button>
-        </DialogClose>
-
-        <div className="flex flex-col items-center px-6 pb-6">
-          <div className="relative -mt-10">
-            <UserAvatar
-              src={avatarUrl}
-              letter={letter}
-              className="size-20 shadow-lg ring-4 ring-background"
-              fallbackClassName="bg-primary text-2xl font-bold uppercase text-primary-foreground"
-            />
-            {/* Change-photo button, bottom-right of the avatar */}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="max-h-[calc(100dvh-1.5rem)] gap-0 overflow-y-auto overscroll-contain p-0 sm:max-w-sm"
+          showCloseButton={false}
+        >
+          {/* Cover band — avatar overlaps it below */}
+          <div className="h-24 shrink-0 bg-gradient-to-br from-primary via-primary/80 to-primary/50" />
+          <DialogClose asChild>
             <Button
-              type="button"
-              size="icon-sm"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-              aria-label="Change profile photo"
-              className="absolute -right-1 bottom-0 size-8 rounded-full shadow-md ring-2 ring-background"
-            >
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Camera className="size-4" />
-              )}
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleFile}
-              className="hidden"
-            />
-          </div>
-
-          <DialogHeader className="mt-3 items-center text-center">
-            <DialogTitle className="text-lg">{username}</DialogTitle>
-            <DialogDescription className="truncate">
-              {user.email}
-            </DialogDescription>
-          </DialogHeader>
-
-          {hasCustomAvatar && (
-            <Button
-              type="button"
               variant="ghost"
-              size="sm"
-              onClick={handleRemove}
-              disabled={busy}
-              className="mt-2 h-7 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+              size="icon-sm"
+              className="absolute top-2 right-2 text-primary-foreground/80 hover:bg-white/15 hover:text-primary-foreground"
             >
-              <Trash2 className="size-3.5" />
-              Remove photo
+              <X />
+              <span className="sr-only">Close</span>
             </Button>
-          )}
+          </DialogClose>
 
-          {error && (
-            <p className="mt-3 w-full rounded-md bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
-              {error}
-            </p>
-          )}
-
-          <dl className="mt-5 w-full space-y-2">
-            {rows.map((r) => (
-              <div
-                key={r.label}
-                className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5"
+          <div className="flex flex-col items-center px-6 pb-6">
+            {/* Drop target on desktop; tap-through to the picker everywhere. */}
+            <div
+              className="relative -mt-10"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+            >
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={busy}
+                aria-label="Change profile photo"
+                className="group relative block rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
-                  {r.icon}
+                <UserAvatar
+                  src={displayAvatar}
+                  letter={letter}
+                  className={cn(
+                    "size-20 shadow-lg ring-4 ring-background transition-shadow",
+                    dragging && "ring-primary"
+                  )}
+                  fallbackClassName="bg-primary text-2xl font-bold uppercase text-primary-foreground"
+                />
+                <span
+                  className={cn(
+                    "absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity",
+                    "group-hover:opacity-100 group-focus-visible:opacity-100",
+                    dragging && "opacity-100"
+                  )}
+                >
+                  <Camera className="size-5" />
                 </span>
-                <dt className="text-xs text-muted-foreground">{r.label}</dt>
-                <dd className="ml-auto min-w-0 truncate text-sm font-medium">
-                  {r.value}
-                </dd>
+                {/* Explicit affordance for touch, where hover does not exist.
+                    Inside the button so the badge is part of the tap target. */}
+                <span
+                  aria-hidden
+                  className="absolute -right-1 bottom-0 flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md ring-2 ring-background"
+                >
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Camera className="size-4" />
+                  )}
+                </span>
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleFile}
+                className="hidden"
+              />
+            </div>
+
+            <DialogHeader className="mt-3 items-center text-center">
+              <DialogTitle className="text-lg">{username}</DialogTitle>
+              <DialogDescription className="truncate">
+                {user.email}
+              </DialogDescription>
+            </DialogHeader>
+
+            {(avatar.originalUrl || hasCustomAvatar) && (
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                {avatar.originalUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={startReadjust}
+                    disabled={busy}
+                  >
+                    <Crop />
+                    Adjust
+                  </Button>
+                )}
+                {hasCustomAvatar && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemove}
+                    disabled={busy}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
+                    Remove
+                  </Button>
+                )}
               </div>
-            ))}
-          </dl>
-        </div>
-      </DialogContent>
-    </Dialog>
+            )}
+
+            {error && (
+              <p className="mt-3 w-full rounded-md bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+                {error}
+              </p>
+            )}
+
+            <dl className="mt-5 w-full space-y-2">
+              {rows.map((r) => (
+                <div
+                  key={r.label}
+                  className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5"
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
+                    {r.icon}
+                  </span>
+                  <dt className="text-xs text-muted-foreground">{r.label}</dt>
+                  <dd className="ml-auto min-w-0 truncate text-sm font-medium">
+                    {r.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AvatarCropper
+        src={editing?.src ?? null}
+        initial={editing?.initial ?? null}
+        open={!!editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        onConfirm={saveCrop}
+        title={editing?.file ? "Adjust your photo" : "Reframe your photo"}
+      />
+    </>
   );
 }
