@@ -174,14 +174,14 @@ export default function CategoriesPage() {
             setKind(v as CategoryKind);
           }}
         >
-          <TabsList>
+          <TabsList data-tour="category-kind">
             <TabsTrigger value="expense">Expense</TabsTrigger>
             <TabsTrigger value="income">Income</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      <Card>
+      <Card data-tour="category-form">
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
             <Input
@@ -209,7 +209,7 @@ export default function CategoriesPage() {
       {loading ? (
         <ListSkeleton rows={6} />
       ) : (
-        <Card className="py-0">
+        <Card className="py-0" data-tour="category-list">
           <ul className="divide-y">
             {shown.map((cat) => (
               <li

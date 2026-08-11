@@ -20,13 +20,21 @@ function getLinks() {
       label: "Today",
       match: "/day",
       Icon: CalendarDays,
+      tour: "nav-today",
     },
-    { href: "/reports", label: "Stats", match: "/reports", Icon: ChartColumn },
+    {
+      href: "/reports",
+      label: "Stats",
+      match: "/reports",
+      Icon: ChartColumn,
+      tour: "nav-stats",
+    },
     {
       href: "/categories",
       label: "Categories",
       match: "/categories",
       Icon: Tags,
+      tour: "nav-categories",
     },
   ];
 }
@@ -53,6 +61,9 @@ export function NavBar() {
                   asChild
                   variant="ghost"
                   size="sm"
+                  // Same marker as the bottom bar below; the tour spotlights
+                  // whichever of the two the breakpoint actually renders.
+                  data-tour={l.tour}
                   className={cn(
                     active &&
                       "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
@@ -89,6 +100,7 @@ export function BottomNav() {
             <Link
               key={l.href}
               href={l.href}
+              data-tour={l.tour}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",

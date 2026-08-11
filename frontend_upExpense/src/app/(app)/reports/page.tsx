@@ -123,11 +123,13 @@ export default function ReportsPage() {
       )}
 
       {/* Keyed by period: changing the filter remounts with fresh state. */}
-      {tab === "month" ? (
-        <MonthReport key={month} month={month} />
-      ) : (
-        <YearReport key={year} year={year} />
-      )}
+      <div data-tour="stats-body">
+        {tab === "month" ? (
+          <MonthReport key={month} month={month} />
+        ) : (
+          <YearReport key={year} year={year} />
+        )}
+      </div>
     </div>
   );
 }

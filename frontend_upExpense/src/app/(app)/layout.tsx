@@ -1,5 +1,6 @@
 import { BottomNav, NavBar } from "@/components/nav-bar";
 import { MotionProvider } from "@/components/motion-provider";
+import { Tour } from "@/components/tour/tour";
 
 export default function AppLayout({
   children,
@@ -14,6 +15,8 @@ export default function AppLayout({
           {children}
         </main>
         <BottomNav />
+        {/* First-run walkthrough — self-mounting, runs once per account. */}
+        <Tour />
       </div>
     </MotionProvider>
   );
