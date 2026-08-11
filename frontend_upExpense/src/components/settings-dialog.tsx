@@ -1,8 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Check, Palette, Settings2 } from "lucide-react";
+import { Check, Compass, Palette, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { TOUR_START_EVENT } from "@/components/tour/tour";
 
 const ACCENTS = [
   { id: "emerald", label: "Emerald", swatch: "oklch(0.596 0.145 163.23)" },
@@ -127,6 +129,39 @@ export function SettingsDialog({
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-muted/30 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
+                <Compass className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-medium leading-tight">
+                  Guided tour
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Categories, expenses and stats
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Close first — the tour needs an unobstructed page to point
+                // at, and Radix only releases the body until it has unmounted.
+                onOpenChange(false);
+                setTimeout(
+                  () => window.dispatchEvent(new Event(TOUR_START_EVENT)),
+                  250
+                );
+              }}
+            >
+              Replay
+            </Button>
           </div>
         </section>
       </DialogContent>

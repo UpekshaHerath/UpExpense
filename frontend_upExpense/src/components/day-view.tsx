@@ -476,7 +476,7 @@ function EntryForm({
             {editing ? `Edit ${verb}` : `Add ${verb}`}
           </p>
 
-          <div className="relative">
+          <div className="relative" data-tour="expense-amount">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">
               Rs.
             </span>
@@ -495,7 +495,7 @@ function EntryForm({
           </div>
 
           {/* Category / source chips — tap to select */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5" data-tour="expense-categories">
             {categories.map((c) => (
               <button
                 key={c.id}
@@ -514,50 +514,53 @@ function EntryForm({
             ))}
           </div>
 
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="Note (optional)"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="flex-1"
-            />
-            {/* Payment method applies to expenses only. */}
-            {!isIncome &&
-              (["cash", "card"] as const).map((m) => (
-                <Button
-                  key={m}
-                  type="button"
-                  variant={payment === m ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setPayment(payment === m ? null : m)}
-                  className="h-9 text-xs uppercase"
-                >
-                  {m}
-                </Button>
-              ))}
-          </div>
+          {/* Grouped so the tour can spotlight "note → payment → save" as one. */}
+          <div className="space-y-3" data-tour="expense-submit">
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Note (optional)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="flex-1"
+              />
+              {/* Payment method applies to expenses only. */}
+              {!isIncome &&
+                (["cash", "card"] as const).map((m) => (
+                  <Button
+                    key={m}
+                    type="button"
+                    variant={payment === m ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPayment(payment === m ? null : m)}
+                    className="h-9 text-xs uppercase"
+                  >
+                    {m}
+                  </Button>
+                ))}
+            </div>
 
-          {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
-          <div className="flex gap-2">
-            <Button type="submit" disabled={saving} className="h-10 flex-1">
-              {saving ? "Saving…" : editing ? "Save changes" : `Add ${verb}`}
-            </Button>
-            {editing && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancelEdit}
-                className="h-10"
-              >
-                Cancel
-              </Button>
+            {error && (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
             )}
+
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving} className="h-10 flex-1">
+                {saving ? "Saving…" : editing ? "Save changes" : `Add ${verb}`}
+              </Button>
+              {editing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onCancelEdit}
+                  className="h-10"
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
           </div>
         </form>
       </CardContent>
