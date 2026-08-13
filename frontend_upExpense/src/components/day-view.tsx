@@ -29,6 +29,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/date-picker";
 import { DaySkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
+import {
+  FirstExpenseCelebration,
+  useFirstExpenseCelebration,
+} from "@/components/first-expense-celebration";
 
 /** A day entry, normalised so expense and income rows render the same way. */
 type Entry = {
@@ -46,6 +50,7 @@ export function DayView({ date }: { date: string }) {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<CategoryKind>("expense");
   const [editing, setEditing] = useState<Entry | null>(null);
+  const celebration = useFirstExpenseCelebration();
 
   // Component is keyed by date (see day/[date]/page.tsx), so this runs
   // once per date and initial state is always fresh.
@@ -114,6 +119,8 @@ export function DayView({ date }: { date: string }) {
       setExpenses((prev) =>
         isEdit ? prev.map((x) => (x.id === e.id ? e : x)) : [...prev, e]
       );
+      // Brand-new expense only — editing an old one isn't a first.
+      if (!isEdit) void celebration.maybeCelebrate();
     } else {
       const i = saved as Income;
       setIncomes((prev) =>
@@ -264,6 +271,11 @@ export function DayView({ date }: { date: string }) {
           )}
         </>
       )}
+
+      <FirstExpenseCelebration
+        open={celebration.celebrating}
+        onClose={celebration.dismiss}
+      />
     </div>
   );
 }
