@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { StreakBadge } from "@/components/streak/streak";
 
 // Link straight to /day/<today> — going through "/" (a server redirect
 // outside this layout group) would unmount and remount the whole shell.
@@ -51,6 +52,9 @@ export function NavBar() {
         </Link>
 
         <div className="flex items-center gap-1">
+          {/* Progress the user can see without opening anything. */}
+          <StreakBadge />
+
           {/* Page links live in the bottom tab bar on mobile. */}
           <div className="hidden items-center gap-1 sm:flex">
             {getLinks().map((l) => {

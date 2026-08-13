@@ -2,8 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "framer-motion";
+import { Check, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Category,
@@ -29,10 +36,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/date-picker";
 import { DaySkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
-import {
-  FirstExpenseCelebration,
-  useFirstExpenseCelebration,
-} from "@/components/first-expense-celebration";
+import { useReward } from "@/components/rewards/rewards";
+import { useStreak } from "@/components/streak/streak";
+import { tapHaptic } from "@/lib/haptics";
 
 /** A day entry, normalised so expense and income rows render the same way. */
 type Entry = {
@@ -50,14 +56,19 @@ export function DayView({ date }: { date: string }) {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<CategoryKind>("expense");
   const [editing, setEditing] = useState<Entry | null>(null);
-  const celebration = useFirstExpenseCelebration();
+  // Newest row, flashed in its category colour for a beat after it lands.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  // Explicit "spent nothing" marker for this date — keeps the streak alive.
+  const [noSpend, setNoSpend] = useState(false);
+  const claim = useReward();
+  const { refresh: refreshStreak } = useStreak();
 
   // Component is keyed by date (see day/[date]/page.tsx), so this runs
   // once per date and initial state is always fresh.
   useEffect(() => {
     let ignore = false;
     (async () => {
-      const [catRes, expRes, incRes] = await Promise.all([
+      const [catRes, expRes, incRes, noSpendRes] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase
           .from("expenses")
@@ -69,11 +80,13 @@ export function DayView({ date }: { date: string }) {
           .select("*, categories(*)")
           .eq("income_date", date)
           .order("created_at"),
+        supabase.from("no_spend_days").select("day").eq("day", date).maybeSingle(),
       ]);
       if (ignore) return;
       if (catRes.data) setCategories(catRes.data);
       if (expRes.data) setExpenses(expRes.data);
       if (incRes.data) setIncomes(incRes.data);
+      setNoSpend(!!noSpendRes.data);
       setLoading(false);
     })();
     return () => {
@@ -112,20 +125,46 @@ export function DayView({ date }: { date: string }) {
     }
   }
 
+  async function markNoSpend() {
+    setNoSpend(true);
+    tapHaptic();
+    const { error } = await supabase.from("no_spend_days").insert({ day: date });
+    if (error) {
+      setNoSpend(false);
+      alert(`Could not save: ${error.message}`);
+      return;
+    }
+    claim("first_no_spend");
+    void refreshStreak({ celebrate: true });
+  }
+
+  async function undoNoSpend() {
+    setNoSpend(false);
+    await supabase.from("no_spend_days").delete().eq("day", date);
+    void refreshStreak();
+  }
+
   function handleSaved(saved: Expense | Income, isEdit: boolean) {
     setEditing(null);
+    if (!isEdit) setFlashId(saved.id);
+
+    // A day with money moving through it is not a no-spend day any more.
+    if (noSpend) void undoNoSpend();
+    if (!isEdit) void refreshStreak({ celebrate: true });
+
     if (mode === "expense") {
       const e = saved as Expense;
       setExpenses((prev) =>
         isEdit ? prev.map((x) => (x.id === e.id ? e : x)) : [...prev, e]
       );
-      // Brand-new expense only — editing an old one isn't a first.
-      if (!isEdit) void celebration.maybeCelebrate();
+      // Brand-new entries only — editing an old one is not a first.
+      if (!isEdit) claim("first_expense");
     } else {
       const i = saved as Income;
       setIncomes((prev) =>
         isEdit ? prev.map((x) => (x.id === i.id ? i : x)) : [...prev, i]
       );
+      if (!isEdit) claim("first_income");
     }
   }
 
@@ -199,13 +238,9 @@ export function DayView({ date }: { date: string }) {
           {/* Day summary — earned, spent, net */}
           <Card className="py-0">
             <CardContent className="grid grid-cols-3 divide-x p-0">
-              <DaySummaryCell label="Earned" value={formatMoney(earned)} />
-              <DaySummaryCell label="Spent" value={formatMoney(spent)} />
-              <DaySummaryCell
-                label="Net"
-                value={formatSignedMoney(net)}
-                tone={netToneClass(net)}
-              />
+              <DaySummaryCell label="Earned" value={earned} />
+              <DaySummaryCell label="Spent" value={spent} />
+              <DaySummaryCell label="Net" value={net} signed tone={netToneClass(net)} />
             </CardContent>
           </Card>
 
@@ -238,6 +273,16 @@ export function DayView({ date }: { date: string }) {
             onCancelEdit={() => setEditing(null)}
           />
 
+          {/* A blank day is ambiguous — spent nothing, or forgot to log? Let
+              the user say so, and the streak survives either way. */}
+          {expenses.length === 0 && incomes.length === 0 && (
+            <NoSpendCard
+              marked={noSpend}
+              onMark={markNoSpend}
+              onUndo={undoNoSpend}
+            />
+          )}
+
           {/* Entry list */}
           {entries.length === 0 ? (
             <EmptyState
@@ -261,6 +306,7 @@ export function DayView({ date }: { date: string }) {
                     <EntryRow
                       key={entry.item.id}
                       entry={entry}
+                      flash={entry.item.id === flashId}
                       onEdit={() => setEditing(entry)}
                       onDelete={() => handleDelete(entry)}
                     />
@@ -271,22 +317,68 @@ export function DayView({ date }: { date: string }) {
           )}
         </>
       )}
-
-      <FirstExpenseCelebration
-        open={celebration.celebrating}
-        onClose={celebration.dismiss}
-      />
     </div>
+  );
+}
+
+/**
+ * Turns the app's churn moment — "nothing to log today, why open this?" — into
+ * a win the streak counts.
+ */
+function NoSpendCard({
+  marked,
+  onMark,
+  onUndo,
+}: {
+  marked: boolean;
+  onMark: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <Card className="py-0">
+      <CardContent className="flex items-center gap-3 px-4 py-3">
+        <span className="text-xl leading-none">🧘</span>
+        {marked ? (
+          <>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">No-spend day</p>
+              <p className="truncate text-xs text-muted-foreground">
+                Zero out. Streak keeps burning.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUndo}
+              className="text-muted-foreground"
+            >
+              Undo
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+              Spent nothing today?
+            </p>
+            <Button variant="outline" size="sm" onClick={onMark}>
+              Mark no-spend
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 function DaySummaryCell({
   label,
   value,
+  signed,
   tone,
 }: {
   label: string;
-  value: string;
+  value: number;
+  signed?: boolean;
   tone?: string;
 }) {
   return (
@@ -294,28 +386,55 @@ function DaySummaryCell({
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <motion.p
-        key={value}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
+      <p
         className={cn(
           "mt-1 truncate text-sm font-bold tabular-nums sm:text-base",
           tone
         )}
       >
-        {value}
-      </motion.p>
+        <CountUpMoney value={value} signed={signed} />
+      </p>
     </div>
   );
 }
 
+/**
+ * Tweens to the new total instead of snapping to it. Saving an expense should
+ * visibly *move* the day's numbers — that half-second is the whole reward for
+ * a tier-1 action.
+ */
+function CountUpMoney({ value, signed }: { value: number; signed?: boolean }) {
+  const reduced = useReducedMotion();
+  // Seeded with the real value so a page load lands on the number rather than
+  // counting up from zero; only later changes animate.
+  const amount = useMotionValue(value);
+  const text = useTransform(amount, (v) =>
+    signed ? formatSignedMoney(v) : formatMoney(v)
+  );
+
+  useEffect(() => {
+    if (reduced) {
+      amount.set(value);
+      return;
+    }
+    const controls = animate(amount, value, {
+      duration: 0.5,
+      ease: "easeOut",
+    });
+    return () => controls.stop();
+  }, [value, amount, reduced]);
+
+  return <motion.span>{text}</motion.span>;
+}
+
 function EntryRow({
   entry,
+  flash,
   onEdit,
   onDelete,
 }: {
   entry: Entry;
+  flash?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -329,8 +448,19 @@ function EntryRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -24 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="flex items-center gap-3 px-4 py-3"
+      className="relative isolate flex items-center gap-3 overflow-hidden px-4 py-3"
     >
+      {/* A wash of the category colour marks the row that just landed. */}
+      {flash && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{ backgroundColor: item.categories?.color ?? "var(--primary)" }}
+          initial={{ opacity: 0.22 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 1.1, ease: "easeOut" }}
+        />
+      )}
       <span
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
         style={{ backgroundColor: `${item.categories?.color}22` }}
@@ -413,11 +543,21 @@ function EntryForm({
       : null
   );
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savedTimer = useRef<number | null>(null);
 
   useEffect(() => {
     amountRef.current?.focus();
   }, [editing]);
+
+  // The form is keyed by mode and edit target, so it unmounts mid-flash often.
+  useEffect(
+    () => () => {
+      if (savedTimer.current) window.clearTimeout(savedTimer.current);
+    },
+    []
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -470,6 +610,12 @@ function EntryForm({
       setError(dbError.message);
       return;
     }
+
+    // Confirm the save in three registers at once: touch, colour, motion.
+    tapHaptic();
+    setJustSaved(true);
+    if (savedTimer.current) window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setJustSaved(false), 1100);
 
     onSaved(data as Expense | Income, !!editing);
     setAmount("");
@@ -559,8 +705,44 @@ function EntryForm({
             )}
 
             <div className="flex gap-2">
-              <Button type="submit" disabled={saving} className="h-10 flex-1">
-                {saving ? "Saving…" : editing ? "Save changes" : `Add ${verb}`}
+              <Button
+                type="submit"
+                disabled={saving}
+                className={cn(
+                  "h-10 flex-1 transition-colors",
+                  justSaved &&
+                    "bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-500"
+                )}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {justSaved ? (
+                    <motion.span
+                      key="saved"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Check className="size-4" />
+                      Saved
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="idle"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      {saving
+                        ? "Saving…"
+                        : editing
+                          ? "Save changes"
+                          : `Add ${verb}`}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </Button>
               {editing && (
                 <Button
