@@ -10,6 +10,8 @@ export type RewardKey =
   | "first_expense"
   | "first_income"
   | "first_no_spend"
+  | "first_loan"
+  | "loan_cleared"
   | "streak_7"
   | "streak_30"
   | "streak_100"
@@ -48,6 +50,20 @@ export const REWARDS: Record<RewardKey, Reward> = {
     line: "Zero rupees out. Somewhere, a shopping cart weeps quietly.",
     cta: "Zen achieved",
     toast: "First no-spend day. Zen master.",
+  },
+  first_loan: {
+    emoji: "🏦",
+    title: "Debt, but make it visible",
+    line: "A loan you can actually see shrinking beats one you avoid thinking about. Every installment counts down.",
+    cta: "Let's shrink it",
+    toast: "First loan tracked. Now watch it shrink.",
+  },
+  loan_cleared: {
+    emoji: "🎉",
+    title: "Loan cleared!",
+    line: "Paid off, down to zero, done. That's one fewer thing quietly owning a piece of your month.",
+    cta: "Free at last",
+    toast: "Loan cleared. Free at last.",
   },
   streak_7: {
     emoji: "🔥",

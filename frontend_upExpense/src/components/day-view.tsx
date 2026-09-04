@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AnimatePresence,
@@ -14,15 +14,22 @@ import { Check, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Category,
-  CategoryKind,
+  EntryKind,
   Expense,
   Income,
+  LoanSummary,
   PaymentMethod,
 } from "@/lib/types";
+import {
+  applyPayment,
+  fetchLoanSummaries,
+  isCleared,
+} from "@/lib/loans";
 import {
   addDays,
   formatDayHeading,
   formatMoney,
+  formatMoneyCompact,
   formatSignedMoney,
   netToneClass,
   todayISO,
@@ -38,11 +45,13 @@ import { DaySkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
 import { useReward } from "@/components/rewards/rewards";
 import { useStreak } from "@/components/streak/streak";
+import { useToast } from "@/components/ui/toast";
+import { LoanProgress } from "@/components/loans/loan-progress";
 import { tapHaptic } from "@/lib/haptics";
 
 /** A day entry, normalised so expense and income rows render the same way. */
 type Entry = {
-  kind: CategoryKind;
+  kind: EntryKind;
   item: Expense | Income;
 };
 
@@ -53,14 +62,16 @@ export function DayView({ date }: { date: string }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [loans, setLoans] = useState<LoanSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<CategoryKind>("expense");
+  const [mode, setMode] = useState<EntryKind>("expense");
   const [editing, setEditing] = useState<Entry | null>(null);
   // Newest row, flashed in its category colour for a beat after it lands.
   const [flashId, setFlashId] = useState<string | null>(null);
   // Explicit "spent nothing" marker for this date — keeps the streak alive.
   const [noSpend, setNoSpend] = useState(false);
   const claim = useReward();
+  const toast = useToast();
   const { refresh: refreshStreak } = useStreak();
 
   // Component is keyed by date (see day/[date]/page.tsx), so this runs
@@ -68,7 +79,7 @@ export function DayView({ date }: { date: string }) {
   useEffect(() => {
     let ignore = false;
     (async () => {
-      const [catRes, expRes, incRes, noSpendRes] = await Promise.all([
+      const [catRes, expRes, incRes, noSpendRes, loanRows] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase
           .from("expenses")
@@ -81,11 +92,15 @@ export function DayView({ date }: { date: string }) {
           .eq("income_date", date)
           .order("created_at"),
         supabase.from("no_spend_days").select("day").eq("day", date).maybeSingle(),
+        // Balances for the loan chips. One RPC — the totals are summed in
+        // Postgres, not by fetching every loan's payments.
+        fetchLoanSummaries(supabase).catch(() => [] as LoanSummary[]),
       ]);
       if (ignore) return;
       if (catRes.data) setCategories(catRes.data);
       if (expRes.data) setExpenses(expRes.data);
       if (incRes.data) setIncomes(incRes.data);
+      setLoans(loanRows);
       setNoSpend(!!noSpendRes.data);
       setLoading(false);
     })();
@@ -105,11 +120,64 @@ export function DayView({ date }: { date: string }) {
       ? expenses.map((item) => ({ kind: "expense", item }))
       : incomes.map((item) => ({ kind: "income", item }));
 
+  const loanIds = useMemo(
+    () => new Set(loans.map((l) => l.category_id)),
+    [loans]
+  );
+
+  /**
+   * Moves a loan's balance by hand instead of refetching. An installment is a
+   * one-row write; making the user wait on a second round trip to see the
+   * balance drop would undo the whole point of the chip.
+   */
+  function shiftLoan(categoryId: string, amount: number, txDelta: number) {
+    if (!loanIds.has(categoryId)) return;
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.category_id === categoryId ? applyPayment(l, amount, txDelta) : l
+      )
+    );
+  }
+
+  /**
+   * Reconciles a saved expense against the loans. An edit can change the
+   * amount *and* move the payment to a different category, so the old row is
+   * backed out before the new one is applied.
+   */
+  function reconcileLoans(next: Expense | null, previous: Expense | null) {
+    if (previous) {
+      shiftLoan(previous.category_id, -Number(previous.amount), -1);
+    }
+    if (!next) return;
+    shiftLoan(next.category_id, Number(next.amount), 1);
+
+    const loan = loans.find((l) => l.category_id === next.category_id);
+    if (!loan) return;
+
+    // Balance after this payment, computed here so the toast matches the bar.
+    const after = applyPayment(
+      previous && previous.category_id === loan.category_id
+        ? applyPayment(loan, -Number(previous.amount), -1)
+        : loan,
+      Number(next.amount),
+      1
+    );
+
+    if (isCleared(after) && !isCleared(loan)) {
+      claim("loan_cleared");
+      return;
+    }
+    toast(`${formatMoney(after.remaining)} left on ${loan.name}`, {
+      icon: loan.icon ?? "🏦",
+    });
+  }
+
   async function handleDelete(entry: Entry) {
     const { kind, item } = entry;
     // Optimistic: remove now, restore on failure.
     if (kind === "expense") {
       setExpenses((prev) => prev.filter((e) => e.id !== item.id));
+      reconcileLoans(null, item as Expense);
     } else {
       setIncomes((prev) => prev.filter((e) => e.id !== item.id));
     }
@@ -118,6 +186,7 @@ export function DayView({ date }: { date: string }) {
     if (error) {
       if (kind === "expense") {
         setExpenses((prev) => [...prev, item as Expense]);
+        reconcileLoans(item as Expense, null);
       } else {
         setIncomes((prev) => [...prev, item as Income]);
       }
@@ -154,9 +223,13 @@ export function DayView({ date }: { date: string }) {
 
     if (mode === "expense") {
       const e = saved as Expense;
+      const previous = isEdit
+        ? (expenses.find((x) => x.id === e.id) ?? null)
+        : null;
       setExpenses((prev) =>
         isEdit ? prev.map((x) => (x.id === e.id ? e : x)) : [...prev, e]
       );
+      reconcileLoans(e, previous);
       // Brand-new entries only — editing an old one is not a first.
       if (!isEdit) claim("first_expense");
     } else {
@@ -249,7 +322,7 @@ export function DayView({ date }: { date: string }) {
             value={mode}
             onValueChange={(v) => {
               setEditing(null);
-              setMode(v as CategoryKind);
+              setMode(v as EntryKind);
             }}
           >
             <TabsList className="w-full">
@@ -268,6 +341,7 @@ export function DayView({ date }: { date: string }) {
             kind={mode}
             date={date}
             categories={modeCategories}
+            loans={mode === "expense" ? loans : []}
             editing={editing && editing.kind === mode ? editing.item : null}
             onSaved={handleSaved}
             onCancelEdit={() => setEditing(null)}
@@ -517,13 +591,16 @@ function EntryForm({
   kind,
   date,
   categories,
+  loans,
   editing,
   onSaved,
   onCancelEdit,
 }: {
-  kind: CategoryKind;
+  kind: EntryKind;
   date: string;
   categories: Category[];
+  /** Loan chips, shown after the ordinary expense ones. Empty for income. */
+  loans: LoanSummary[];
   editing: Expense | Income | null;
   onSaved: (saved: Expense | Income, isEdit: boolean) => void;
   onCancelEdit: () => void;
@@ -624,7 +701,14 @@ function EntryForm({
     amountRef.current?.focus();
   }
 
-  const verb = isIncome ? "income" : "expense";
+  const selectedLoan = categoryId
+    ? (loans.find((l) => l.category_id === categoryId) ?? null)
+    : null;
+  const verb = isIncome
+    ? "income"
+    : selectedLoan
+      ? "payment"
+      : "expense";
 
   return (
     <Card>
@@ -671,6 +755,52 @@ function EntryForm({
               </button>
             ))}
           </div>
+
+          {/* Loans repay through the same form: pick the loan instead of a
+              category and the installment counts its balance down. */}
+          {loans.length > 0 && (
+            <div className="space-y-1.5" data-tour="expense-loans">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Loans
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {loans.map((l) => {
+                  const selected = categoryId === l.category_id;
+                  const cleared = isCleared(l);
+                  return (
+                    <button
+                      key={l.category_id}
+                      type="button"
+                      onClick={() => setCategoryId(l.category_id)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                        selected
+                          ? "border-transparent text-white"
+                          : "text-muted-foreground hover:bg-muted",
+                        cleared && !selected && "opacity-60"
+                      )}
+                      style={selected ? { backgroundColor: l.color } : {}}
+                    >
+                      <span>
+                        {l.icon ?? "🏦"} {l.name}
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          selected ? "opacity-80" : "opacity-70"
+                        )}
+                      >
+                        {cleared ? "cleared" : formatMoneyCompact(l.remaining)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* What this installment does to the loan, before it is saved. */}
+          {selectedLoan && <LoanPaymentPreview loan={selectedLoan} amount={amount} />}
 
           {/* Grouped so the tour can spotlight "note → payment → save" as one. */}
           <div className="space-y-3" data-tour="expense-submit">
@@ -759,5 +889,44 @@ function EntryForm({
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Live read-out of what the amount being typed does to the selected loan.
+ * The point of repaying through the expense form is watching the balance fall
+ * — so show it falling before the save, not only after.
+ */
+function LoanPaymentPreview({
+  loan,
+  amount,
+}: {
+  loan: LoanSummary;
+  amount: string;
+}) {
+  const value = parseFloat(amount);
+  const pending = Number.isFinite(value) && value > 0 ? value : 0;
+  const after = pending > 0 ? applyPayment(loan, pending, 1) : loan;
+  const overpay = pending > loan.remaining ? pending - loan.remaining : 0;
+
+  return (
+    <div className="space-y-1.5 rounded-lg border bg-muted/40 px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="min-w-0 truncate font-medium">
+          {loan.icon ?? "🏦"} {loan.name}
+        </span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatMoney(after.remaining)} left
+          {pending > 0 && " after this"}
+        </span>
+      </div>
+      <LoanProgress loan={after} height="h-1.5" />
+      {overpay > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {formatMoney(overpay)} more than the balance — saved as spend
+          either way, and the loan is marked cleared.
+        </p>
+      )}
+    </div>
   );
 }

@@ -9,6 +9,16 @@ export function formatMoney(amount: number): string {
   return currencyFormatter.format(amount);
 }
 
+const compactNumberFormatter = new Intl.NumberFormat("en-LK", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** Short money for tight spots (chips, badges): "Rs 1.2M", "Rs 45K". */
+export function formatMoneyCompact(amount: number): string {
+  return `Rs ${compactNumberFormatter.format(amount)}`;
+}
+
 /** Money with an explicit +/− sign — for net balances (income − expense). */
 export function formatSignedMoney(amount: number): string {
   const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";

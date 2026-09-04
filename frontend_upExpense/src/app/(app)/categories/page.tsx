@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Category, CategoryKind } from "@/lib/types";
+import { useHash } from "@/lib/use-hash";
 import { ColorPicker } from "@/components/color-picker";
 import { IconPicker } from "@/components/icon-picker";
 import { ListSkeleton } from "@/components/skeletons";
+import { LoansPanel } from "@/components/loans/loans-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -23,10 +25,24 @@ import { Card } from "@/components/ui/card";
 import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+/** Tab state lives in the URL hash; "expense" is the bare-URL default. */
+const KIND_TO_HASH: Record<CategoryKind, string> = {
+  expense: "",
+  income: "income",
+  loan: "loans",
+};
+
+const HASH_TO_KIND: Record<string, CategoryKind> = {
+  income: "income",
+  loans: "loan",
+};
+
 /** The non-deletable fallback category each kind reassigns orphans to. */
 const FALLBACK_NAME: Record<CategoryKind, string> = {
   expense: "Other",
   income: "Other Income",
+  // A loan's payments are expenses, so they fall back to the expense side.
+  loan: "Other",
 };
 
 export default function CategoriesPage() {
@@ -35,8 +51,11 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Which side we're managing.
-  const [kind, setKind] = useState<CategoryKind>("expense");
+  // Which side we're managing lives in the URL hash, so the tab is
+  // deep-linkable and survives a back-navigation. A hash rather than a search
+  // param keeps this page free of a Suspense boundary.
+  const hash = useHash();
+  const kind = HASH_TO_KIND[hash] ?? "expense";
 
   // Add form
   const [newName, setNewName] = useState("");
@@ -161,6 +180,10 @@ export default function CategoriesPage() {
   }
 
   const shown = categories.filter((c) => c.kind === kind);
+  // Loan payments are expenses, so a deleted loan reassigns them here.
+  const fallbackExpenseId =
+    categories.find((c) => c.kind === "expense" && c.name === "Other")?.id ??
+    null;
 
   return (
     <div className="space-y-6">
@@ -171,16 +194,22 @@ export default function CategoriesPage() {
           onValueChange={(v) => {
             setError(null);
             setEditId(null);
-            setKind(v as CategoryKind);
+            // Assigning the hash fires `hashchange`, which re-renders us.
+            window.location.hash = KIND_TO_HASH[v as CategoryKind];
           }}
         >
           <TabsList data-tour="category-kind">
             <TabsTrigger value="expense">Expense</TabsTrigger>
             <TabsTrigger value="income">Income</TabsTrigger>
+            <TabsTrigger value="loan">Loans</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
+      {kind === "loan" ? (
+        <LoansPanel fallbackCategoryId={fallbackExpenseId} />
+      ) : (
+        <>
       <Card data-tour="category-form">
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2">
@@ -296,6 +325,9 @@ export default function CategoriesPage() {
             ))}
           </ul>
         </Card>
+      )}
+
+        </>
       )}
 
       <AlertDialog

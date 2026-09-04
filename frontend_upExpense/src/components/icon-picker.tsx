@@ -38,6 +38,18 @@ const INCOME_ICONS = [
   "💰", "💳", "🤑", "🐷", "💎", "🍀", "📥", "➕",
 ];
 
+// Curated, debt-relevant icons — grouped roughly by what was borrowed for.
+const LOAN_ICONS = [
+  // Lenders & paperwork
+  "🏦", "📄", "🖊️", "💳", "🧾", "📋", "⚖️", "🤝",
+  // What the money bought
+  "🚗", "🏍️", "🏠", "🏘️", "💻", "📱", "🛋️", "🎓",
+  // Life events
+  "💒", "👶", "✈️", "🏥", "🦷", "🛠️", "🏪", "🌱",
+  // Money & burden
+  "💸", "💰", "⏳", "📉", "⛓️", "🧮", "📅", "➖",
+];
+
 export function IconPicker({
   value,
   onChange,
@@ -48,7 +60,8 @@ export function IconPicker({
   kind?: CategoryKind;
 }) {
   const [open, setOpen] = useState(false);
-  const icons = kind === "income" ? INCOME_ICONS : EXPENSE_ICONS;
+  const icons =
+    kind === "income" ? INCOME_ICONS : kind === "loan" ? LOAN_ICONS : EXPENSE_ICONS;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
