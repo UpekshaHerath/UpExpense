@@ -50,6 +50,14 @@ const LOAN_ICONS = [
   "💸", "💰", "⏳", "📉", "⛓️", "🧮", "📅", "➖",
 ];
 
+/** Shown on the trigger until an icon is picked — matches each kind's own
+ *  fallback elsewhere in the app, so nothing changes shape on selection. */
+const PLACEHOLDER: Record<CategoryKind, string> = {
+  expense: "🏷️",
+  income: "💰",
+  loan: "🏦",
+};
+
 export function IconPicker({
   value,
   onChange,
@@ -73,7 +81,7 @@ export function IconPicker({
           aria-label="Choose icon"
           className="text-lg"
         >
-          {value || "🏷️"}
+          {value || PLACEHOLDER[kind]}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-2">
