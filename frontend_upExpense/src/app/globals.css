@@ -343,3 +343,59 @@
     cursor: pointer;
   }
 }
+
+/* Tailwind v4 drops custom rules written into @layer components, so this
+   lives in @layer base — which still sits below utilities, keeping any
+   utility class the caller passes (position, overflow) the winner. */
+@layer base {
+  /* Touch feedback: a wave from the point of contact. Three custom
+     properties are written straight to the node by the pointer handler, so a
+     tap costs no React render — see src/lib/ripple.ts.
+
+     `isolation` + a negative z-index keep the wave above the element's own
+     background but behind its label, so text stays crisp mid-ripple. */
+  .ripple {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ripple[data-ripple]::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: var(--ripple-y);
+    left: var(--ripple-x);
+    width: var(--ripple-size);
+    height: var(--ripple-size);
+    /* Offset by half via margins so the animation is transform-only, which
+       keeps it on the compositor. */
+    margin-top: calc(var(--ripple-size) / -2);
+    margin-left: calc(var(--ripple-size) / -2);
+    border-radius: 9999px;
+    /* currentColor reads correctly on every button variant and both themes:
+       white on a solid primary, foreground on ghost, red on destructive. */
+    background-color: currentColor;
+    pointer-events: none;
+    animation: ripple 520ms cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
+  }
+
+  @keyframes ripple {
+    from {
+      opacity: 0.26;
+      transform: scale(0.15);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+
+  /* Matches the contract MotionProvider sets for every other animation. */
+  @media (prefers-reduced-motion: reduce) {
+    .ripple[data-ripple]::before {
+      content: none;
+    }
+  }
+}
