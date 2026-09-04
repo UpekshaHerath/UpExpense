@@ -3,12 +3,19 @@
 import { useSyncExternalStore } from "react";
 import { Check, Compass, Palette, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
+  DialogMedia,
+  DialogSection,
+  DialogSectionHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TOUR_START_EVENT } from "@/components/tour/tour";
@@ -70,100 +77,89 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center gap-3 text-left">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Settings2 className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle>Settings</DialogTitle>
-              <DialogDescription>
-                Personalize how upExpense looks for you.
-              </DialogDescription>
-            </div>
-          </div>
+          <DialogMedia>
+            <Settings2 />
+          </DialogMedia>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>
+            Personalize how upExpense looks for you.
+          </DialogDescription>
         </DialogHeader>
 
-        <section className="rounded-2xl border bg-muted/30 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
-                <Palette className="size-4" />
-              </span>
-              <div>
-                <h3 className="text-sm font-medium leading-tight">
-                  Accent color
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Buttons, charts and highlights
-                </p>
-              </div>
-            </div>
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-              {current.label}
-            </span>
-          </div>
+        <DialogBody>
+          <DialogSection>
+            <DialogSectionHeader
+              icon={<Palette />}
+              title="Accent color"
+              hint="Buttons, charts and highlights"
+              action={
+                <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
+                  {current.label}
+                </Badge>
+              }
+            />
 
-          <div className="mt-4 flex flex-wrap gap-3">
-            {ACCENTS.map((a) => {
-              const selected = a.id === accent;
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => setAccent(a.id)}
-                  aria-pressed={selected}
-                  aria-label={`${a.label} accent`}
-                  title={a.label}
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                    selected &&
-                      "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                  )}
-                  style={{ backgroundColor: a.swatch }}
-                >
-                  {selected && (
-                    <Check className="size-4 text-white drop-shadow" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border bg-muted/30 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
-                <Compass className="size-4" />
-              </span>
-              <div>
-                <h3 className="text-sm font-medium leading-tight">
-                  Guided tour
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Categories, expenses and stats
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                // Close first — the tour needs an unobstructed page to point
-                // at, and Radix only releases the body until it has unmounted.
-                onOpenChange(false);
-                setTimeout(
-                  () => window.dispatchEvent(new Event(TOUR_START_EVENT)),
-                  250
+            <div className="mt-3 flex flex-wrap gap-2.5">
+              {ACCENTS.map((a) => {
+                const selected = a.id === accent;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setAccent(a.id)}
+                    aria-pressed={selected}
+                    aria-label={`${a.label} accent`}
+                    title={a.label}
+                    className={cn(
+                      "ripple flex size-9 items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover focus-visible:outline-none",
+                      selected &&
+                        "ring-2 ring-primary ring-offset-2 ring-offset-popover"
+                    )}
+                    style={{ backgroundColor: a.swatch }}
+                  >
+                    {selected && (
+                      <Check className="size-4 text-white drop-shadow" />
+                    )}
+                  </button>
                 );
-              }}
-            >
-              Replay
-            </Button>
-          </div>
-        </section>
+              })}
+            </div>
+          </DialogSection>
+
+          <DialogSection>
+            <DialogSectionHeader
+              icon={<Compass />}
+              title="Guided tour"
+              hint="Categories, expenses and stats"
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Close first — the tour needs an unobstructed page to
+                    // point at, and Radix only releases the body once the
+                    // dialog has unmounted.
+                    onOpenChange(false);
+                    setTimeout(
+                      () => window.dispatchEvent(new Event(TOUR_START_EVENT)),
+                      250
+                    );
+                  }}
+                >
+                  Replay
+                </Button>
+              }
+            />
+          </DialogSection>
+        </DialogBody>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button size="lg">Done</Button>
+          </DialogClose>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
