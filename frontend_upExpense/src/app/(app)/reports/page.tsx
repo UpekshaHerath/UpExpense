@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import type {
-  CategoryKind,
+  EntryKind,
   CategoryTotal,
   DailyTotal,
   Expense,
@@ -516,7 +516,7 @@ function CategoryBreakdown({
   month?: string;
   year?: number;
 }) {
-  const [kind, setKind] = useState<CategoryKind>("expense");
+  const [kind, setKind] = useState<EntryKind>("expense");
   const cats = kind === "expense" ? expCats : incCats;
   const total = cats.reduce((s, c) => s + Number(c.total), 0);
 
@@ -526,7 +526,7 @@ function CategoryBreakdown({
         <h2 className="text-sm font-semibold text-muted-foreground">
           By {kind === "income" ? "source" : "category"}
         </h2>
-        <Tabs value={kind} onValueChange={(v) => setKind(v as CategoryKind)}>
+        <Tabs value={kind} onValueChange={(v) => setKind(v as EntryKind)}>
           <TabsList className="h-8">
             <TabsTrigger value="expense" className="text-xs">
               Expense
@@ -573,7 +573,7 @@ function CategoryBars({
 }: {
   cats: CategoryTotal[];
   total: number;
-  kind: CategoryKind;
+  kind: EntryKind;
   month?: string;
   year?: number;
 }) {
@@ -651,7 +651,7 @@ function CategoryDrilldown({
   year,
 }: {
   categoryId: string;
-  kind: CategoryKind;
+  kind: EntryKind;
   month?: string;
   year?: number;
 }) {
