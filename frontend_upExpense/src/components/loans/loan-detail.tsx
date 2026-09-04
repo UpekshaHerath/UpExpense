@@ -190,7 +190,7 @@ export function LoanDetail({ id }: { id: string }) {
                   <li key={p.id}>
                     <Link
                       href={`/day/${p.expense_date}`}
-                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+                      className="ripple flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">

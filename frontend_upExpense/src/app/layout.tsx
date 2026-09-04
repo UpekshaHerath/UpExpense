@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { PwaRegister } from "@/components/pwa-register";
 import { PwaTitlebar } from "@/components/pwa-titlebar";
+import { RippleRoot } from "@/components/ripple-root";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -90,6 +91,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <PwaTitlebar />
         <PwaRegister />
+        {/* One delegated listener drives touch feedback for the whole app. */}
+        <RippleRoot />
         {children}
       </body>
     </html>

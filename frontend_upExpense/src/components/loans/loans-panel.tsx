@@ -231,7 +231,7 @@ function LoanRow({
             </span>
             <Link
               href={`/loans/${loan.category_id}`}
-              className="min-w-0 flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ripple min-w-0 flex-1 rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
                 {loan.name}

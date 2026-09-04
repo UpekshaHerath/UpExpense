@@ -11,7 +11,6 @@ import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { StreakBadge } from "@/components/streak/streak";
-import { useRipple } from "@/lib/ripple";
 
 // Link straight to /day/<today> — going through "/" (a server redirect
 // outside this layout group) would unmount and remount the whole shell.
@@ -92,7 +91,6 @@ export function NavBar() {
 /** Mobile-only bottom tab bar — thumb-reachable navigation. */
 export function BottomNav() {
   const pathname = usePathname();
-  const ripple = useRipple<HTMLAnchorElement>();
 
   return (
     <nav
@@ -108,7 +106,7 @@ export function BottomNav() {
               href={l.href}
               data-tour={l.tour}
               aria-current={active ? "page" : undefined}
-              {...ripple}
+              data-ripple-host
               className={cn(
                 "relative isolate flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
                 active

@@ -48,7 +48,6 @@ import { useStreak } from "@/components/streak/streak";
 import { useToast } from "@/components/ui/toast";
 import { LoanProgress } from "@/components/loans/loan-progress";
 import { tapHaptic } from "@/lib/haptics";
-import { useRipple } from "@/lib/ripple";
 
 /** A day entry, normalised so expense and income rows render the same way. */
 type Entry = {
@@ -609,9 +608,6 @@ function EntryForm({
   const supabase = createClient();
   const amountRef = useRef<HTMLInputElement>(null);
   const isIncome = kind === "income";
-  // Chips are the most-tapped thing in the app and are not <Button>s, so they
-  // opt into the same touch feedback by hand.
-  const ripple = useRipple<HTMLButtonElement>();
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   const [categoryId, setCategoryId] = useState<string | null>(
@@ -747,7 +743,6 @@ function EntryForm({
                 key={c.id}
                 type="button"
                 onClick={() => setCategoryId(c.id)}
-                {...ripple}
                 className={cn(
                   "ripple rounded-full border px-3 py-1.5 text-xs font-medium transition",
                   categoryId === c.id
@@ -777,7 +772,6 @@ function EntryForm({
                       key={l.category_id}
                       type="button"
                       onClick={() => setCategoryId(l.category_id)}
-                      {...ripple}
                       className={cn(
                         "ripple flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                         selected

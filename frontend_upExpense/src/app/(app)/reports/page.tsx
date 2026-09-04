@@ -590,7 +590,7 @@ function CategoryBars({
             <button
               onClick={() => setOpenId(open ? null : c.category_id)}
               title={`${c.name}: ${formatMoney(value)} · ${c.tx_count} ent(y/ies)`}
-              className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-muted/50"
+              className="ripple w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-muted/50"
             >
               <span className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="flex min-w-0 items-center gap-1 truncate font-medium">

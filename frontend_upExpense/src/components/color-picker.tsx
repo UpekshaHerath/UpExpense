@@ -59,7 +59,7 @@ export function ColorPicker({
                 }}
                 aria-label={`Color ${color}`}
                 className={cn(
-                  "flex size-8 items-center justify-center rounded-full transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "ripple flex size-8 items-center justify-center rounded-full transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected && "ring-2 ring-ring ring-offset-2 ring-offset-popover"
                 )}
                 style={{ backgroundColor: color }}
@@ -76,7 +76,7 @@ export function ColorPicker({
           <button
             type="button"
             onClick={() => customRef.current?.click()}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="ripple flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
           >
             <span
               className={cn(
