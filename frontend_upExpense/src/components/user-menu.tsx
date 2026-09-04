@@ -526,8 +526,16 @@ function ProfileDialog({
                 onClick={() => fileRef.current?.click()}
                 disabled={busy}
                 aria-label="Change profile photo"
-                className="group relative block rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                data-ripple-host
+                className="group relative isolate block rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
+                {/* The camera badge hangs outside the button, so the wave is
+                    clipped to this overlay rather than to the button. */}
+                <span
+                  aria-hidden
+                  data-ripple-surface
+                  className="ripple pointer-events-none absolute inset-0 -z-10 rounded-full"
+                />
                 <UserAvatar
                   src={displayAvatar}
                   letter={letter}
