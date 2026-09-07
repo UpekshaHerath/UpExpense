@@ -282,7 +282,7 @@ function YearReport({ year }: { year: number }) {
   const net = incTotal - expTotal;
 
   if (loading) {
-    return <ReportSkeleton />;
+    return <ReportSkeleton chartHeight="h-56" groups={12} />;
   }
 
   const flow = monthlyFlow(expMonths, incMonths);
