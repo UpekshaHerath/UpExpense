@@ -43,12 +43,14 @@ import { EmptyState as EmptyStateBox } from "@/components/empty-state";
 
 type Tab = "month" | "year";
 
-// Expense keeps the themeable brand primary; income gets a fixed money-green
-// so the two series read the same in every theme (dataviz: distinct hues,
-// labels + values on every tooltip/row so colour is never the only signal).
+// Money semantics beat theming here: income is a fixed green, expense a fixed
+// red, so the two series read the same in every theme and never collide with
+// the user's accent colour (dataviz: distinct hues, labels + values on every
+// tooltip/row so colour is never the only signal).
 const INCOME_COLOR = "oklch(0.62 0.17 152)";
+const EXPENSE_COLOR = "oklch(0.62 0.19 27)";
 const flowConfig = {
-  expense: { label: "Spent", color: "var(--primary)" },
+  expense: { label: "Spent", color: EXPENSE_COLOR },
   income: { label: "Income", color: INCOME_COLOR },
 } satisfies ChartConfig;
 
@@ -447,7 +449,7 @@ function FlowCard({
         </div>
         <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground">
           <LegendDot color={INCOME_COLOR} label="Income" />
-          <LegendDot color="var(--primary)" label="Spent" />
+          <LegendDot color={EXPENSE_COLOR} label="Spent" />
         </div>
       </CardHeader>
       <CardContent className="px-2 py-4 sm:px-6">
