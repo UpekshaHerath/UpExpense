@@ -9,6 +9,7 @@ import { ColorPicker } from "@/components/color-picker";
 import { IconPicker } from "@/components/icon-picker";
 import { ListSkeleton } from "@/components/skeletons";
 import { LoansPanel } from "@/components/loans/loans-panel";
+import { SavingsPanel } from "@/components/savings/savings-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -30,11 +31,13 @@ const KIND_TO_HASH: Record<CategoryKind, string> = {
   expense: "",
   income: "income",
   loan: "loans",
+  saving: "savings",
 };
 
 const HASH_TO_KIND: Record<string, CategoryKind> = {
   income: "income",
   loans: "loan",
+  savings: "saving",
 };
 
 /** The non-deletable fallback category each kind reassigns orphans to. */
@@ -43,6 +46,9 @@ const FALLBACK_NAME: Record<CategoryKind, string> = {
   income: "Other Income",
   // A loan's payments are expenses, so they fall back to the expense side.
   loan: "Other",
+  // A pot's deposits are expenses too; its withdrawals fall back separately
+  // (see SavingsPanel, which handles both tables).
+  saving: "Other",
 };
 
 export default function CategoriesPage() {
@@ -184,6 +190,10 @@ export default function CategoriesPage() {
   const fallbackExpenseId =
     categories.find((c) => c.kind === "expense" && c.name === "Other")?.id ??
     null;
+  // A savings withdrawal is an income, so deleting a pot needs this one too.
+  const fallbackIncomeId =
+    categories.find((c) => c.kind === "income" && c.name === "Other Income")
+      ?.id ?? null;
 
   return (
     <div className="space-y-6">
@@ -202,12 +212,18 @@ export default function CategoriesPage() {
             <TabsTrigger value="expense">Expense</TabsTrigger>
             <TabsTrigger value="income">Income</TabsTrigger>
             <TabsTrigger value="loan">Loans</TabsTrigger>
+            <TabsTrigger value="saving">Savings</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       {kind === "loan" ? (
         <LoansPanel fallbackCategoryId={fallbackExpenseId} />
+      ) : kind === "saving" ? (
+        <SavingsPanel
+          fallbackExpenseId={fallbackExpenseId}
+          fallbackIncomeId={fallbackIncomeId}
+        />
       ) : (
         <>
       <Card data-tour="category-form">

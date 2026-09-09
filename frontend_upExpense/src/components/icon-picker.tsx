@@ -50,12 +50,25 @@ const LOAN_ICONS = [
   "💸", "💰", "⏳", "📉", "⛓️", "🧮", "📅", "➖",
 ];
 
+// Curated, goal-relevant icons — grouped roughly by what you're saving for.
+const SAVING_ICONS = [
+  // The pot itself
+  "🐷", "🏦", "💰", "🫙", "🎯", "📈", "🪙", "🔒",
+  // Big purchases
+  "🏠", "🚗", "🏍️", "💻", "📱", "🛋️", "🛠️", "💍",
+  // Life & plans
+  "✈️", "🏖️", "🎓", "👶", "💒", "🏥", "🎁", "🐕",
+  // Safety & growth
+  "☂️", "🛡️", "🌱", "💎", "🧮", "📅", "⭐", "➕",
+];
+
 /** Shown on the trigger until an icon is picked — matches each kind's own
  *  fallback elsewhere in the app, so nothing changes shape on selection. */
 const PLACEHOLDER: Record<CategoryKind, string> = {
   expense: "🏷️",
   income: "💰",
   loan: "🏦",
+  saving: "🐷",
 };
 
 export function IconPicker({
@@ -69,7 +82,13 @@ export function IconPicker({
 }) {
   const [open, setOpen] = useState(false);
   const icons =
-    kind === "income" ? INCOME_ICONS : kind === "loan" ? LOAN_ICONS : EXPENSE_ICONS;
+    kind === "income"
+      ? INCOME_ICONS
+      : kind === "loan"
+        ? LOAN_ICONS
+        : kind === "saving"
+          ? SAVING_ICONS
+          : EXPENSE_ICONS;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
