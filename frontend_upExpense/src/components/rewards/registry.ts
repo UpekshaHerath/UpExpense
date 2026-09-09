@@ -12,6 +12,8 @@ export type RewardKey =
   | "first_no_spend"
   | "first_loan"
   | "loan_cleared"
+  | "first_saving"
+  | "saving_reached"
   | "streak_7"
   | "streak_30"
   | "streak_100"
@@ -64,6 +66,20 @@ export const REWARDS: Record<RewardKey, Reward> = {
     line: "Paid off, down to zero, done. That's one fewer thing quietly owning a piece of your month.",
     cta: "Free at last",
     toast: "Loan cleared. Free at last.",
+  },
+  first_saving: {
+    emoji: "🐷",
+    title: "A pot with your name on it",
+    line: "Money you set aside on purpose stops being money you accidentally spend. Every deposit fills the jar.",
+    cta: "Start filling",
+    toast: "First savings pot. Now fill it.",
+  },
+  saving_reached: {
+    emoji: "🎯",
+    title: "Target reached!",
+    line: "You named a number, and you got there. That is the whole skill — the rest is just repeating it.",
+    cta: "Worth it",
+    toast: "Savings target reached. Worth it.",
   },
   streak_7: {
     emoji: "🔥",

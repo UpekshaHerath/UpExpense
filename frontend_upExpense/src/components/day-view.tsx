@@ -19,12 +19,21 @@ import type {
   Income,
   LoanSummary,
   PaymentMethod,
+  SavingSummary,
 } from "@/lib/types";
 import {
   applyPayment,
   fetchLoanSummaries,
   isCleared,
 } from "@/lib/loans";
+import {
+  applyContribution,
+  fetchSavingSummaries,
+  hasTarget,
+  isClosed as isPotClosed,
+  isReached,
+  remainingToTarget,
+} from "@/lib/savings";
 import {
   addDays,
   formatDayHeading,
@@ -47,6 +56,7 @@ import { useReward } from "@/components/rewards/rewards";
 import { useStreak } from "@/components/streak/streak";
 import { useToast } from "@/components/ui/toast";
 import { LoanProgress } from "@/components/loans/loan-progress";
+import { SavingProgress } from "@/components/savings/saving-progress";
 import { tapHaptic } from "@/lib/haptics";
 
 /** A day entry, normalised so expense and income rows render the same way. */
@@ -63,6 +73,7 @@ export function DayView({ date }: { date: string }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [loans, setLoans] = useState<LoanSummary[]>([]);
+  const [pots, setPots] = useState<SavingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<EntryKind>("expense");
   const [editing, setEditing] = useState<Entry | null>(null);
@@ -79,28 +90,36 @@ export function DayView({ date }: { date: string }) {
   useEffect(() => {
     let ignore = false;
     (async () => {
-      const [catRes, expRes, incRes, noSpendRes, loanRows] = await Promise.all([
-        supabase.from("categories").select("*").order("name"),
-        supabase
-          .from("expenses")
-          .select("*, categories(*)")
-          .eq("expense_date", date)
-          .order("created_at"),
-        supabase
-          .from("incomes")
-          .select("*, categories(*)")
-          .eq("income_date", date)
-          .order("created_at"),
-        supabase.from("no_spend_days").select("day").eq("day", date).maybeSingle(),
-        // Balances for the loan chips. One RPC — the totals are summed in
-        // Postgres, not by fetching every loan's payments.
-        fetchLoanSummaries(supabase).catch(() => [] as LoanSummary[]),
-      ]);
+      const [catRes, expRes, incRes, noSpendRes, loanRows, potRows] =
+        await Promise.all([
+          supabase.from("categories").select("*").order("name"),
+          supabase
+            .from("expenses")
+            .select("*, categories(*)")
+            .eq("expense_date", date)
+            .order("created_at"),
+          supabase
+            .from("incomes")
+            .select("*, categories(*)")
+            .eq("income_date", date)
+            .order("created_at"),
+          supabase
+            .from("no_spend_days")
+            .select("day")
+            .eq("day", date)
+            .maybeSingle(),
+          // Balances for the loan chips. One RPC — the totals are summed in
+          // Postgres, not by fetching every loan's payments.
+          fetchLoanSummaries(supabase).catch(() => [] as LoanSummary[]),
+          // Balances for the savings chips — same one-RPC treatment.
+          fetchSavingSummaries(supabase).catch(() => [] as SavingSummary[]),
+        ]);
       if (ignore) return;
       if (catRes.data) setCategories(catRes.data);
       if (expRes.data) setExpenses(expRes.data);
       if (incRes.data) setIncomes(incRes.data);
       setLoans(loanRows);
+      setPots(potRows);
       setNoSpend(!!noSpendRes.data);
       setLoading(false);
     })();
@@ -123,6 +142,20 @@ export function DayView({ date }: { date: string }) {
   const loanIds = useMemo(
     () => new Set(loans.map((l) => l.category_id)),
     [loans]
+  );
+
+  const potIds = useMemo(
+    () => new Set(pots.map((p) => p.category_id)),
+    [pots]
+  );
+
+  /**
+   * Chips the form offers. A closed pot is retired from the list, but stays
+   * visible while its own entry is being edited — otherwise the selected chip
+   * would vanish mid-edit.
+   */
+  const formPots = pots.filter(
+    (p) => !isPotClosed(p) || p.category_id === editing?.item.category_id
   );
 
   /**
@@ -172,6 +205,70 @@ export function DayView({ date }: { date: string }) {
     });
   }
 
+  /**
+   * Moves a pot's balance by hand instead of refetching — the same reasoning
+   * as shiftLoan: a deposit is a one-row write and the chip must react to it
+   * immediately.
+   */
+  function shiftPot(
+    categoryId: string,
+    deltas: { depositDelta?: number; withdrawDelta?: number; txDelta?: number }
+  ) {
+    if (!potIds.has(categoryId)) return;
+    setPots((prev) =>
+      prev.map((p) =>
+        p.category_id === categoryId ? applyContribution(p, deltas) : p
+      )
+    );
+  }
+
+  /**
+   * Reconciles a saved entry against the savings pots. Direction depends on
+   * which table it landed in: an expense fills a pot, an income empties it.
+   * An edit can change the amount *and* the category, so the old row is
+   * backed out before the new one is applied.
+   */
+  function reconcileSavings(
+    kind: EntryKind,
+    next: Expense | Income | null,
+    previous: Expense | Income | null
+  ) {
+    const side = kind === "income" ? "withdrawDelta" : "depositDelta";
+
+    if (previous) {
+      shiftPot(previous.category_id, {
+        [side]: -Number(previous.amount),
+        txDelta: -1,
+      });
+    }
+    if (!next) return;
+    shiftPot(next.category_id, { [side]: Number(next.amount), txDelta: 1 });
+
+    const pot = pots.find((p) => p.category_id === next.category_id);
+    if (!pot) return;
+
+    // Balance after this entry, computed here so the toast matches the bar.
+    const backedOut =
+      previous && previous.category_id === pot.category_id
+        ? applyContribution(pot, {
+            [side]: -Number(previous.amount),
+            txDelta: -1,
+          })
+        : pot;
+    const after = applyContribution(backedOut, {
+      [side]: Number(next.amount),
+      txDelta: 1,
+    });
+
+    if (isReached(after) && !isReached(pot)) {
+      claim("saving_reached");
+      return;
+    }
+    toast(`${formatMoney(after.balance)} in ${pot.name}`, {
+      icon: pot.icon ?? "🐷",
+    });
+  }
+
   async function handleDelete(entry: Entry) {
     const { kind, item } = entry;
     // Optimistic: remove now, restore on failure.
@@ -181,6 +278,7 @@ export function DayView({ date }: { date: string }) {
     } else {
       setIncomes((prev) => prev.filter((e) => e.id !== item.id));
     }
+    reconcileSavings(kind, null, item);
     const table = kind === "expense" ? "expenses" : "incomes";
     const { error } = await supabase.from(table).delete().eq("id", item.id);
     if (error) {
@@ -190,6 +288,7 @@ export function DayView({ date }: { date: string }) {
       } else {
         setIncomes((prev) => [...prev, item as Income]);
       }
+      reconcileSavings(kind, item, null);
       alert(`Delete failed: ${error.message}`);
     }
   }
@@ -230,13 +329,18 @@ export function DayView({ date }: { date: string }) {
         isEdit ? prev.map((x) => (x.id === e.id ? e : x)) : [...prev, e]
       );
       reconcileLoans(e, previous);
+      reconcileSavings("expense", e, previous);
       // Brand-new entries only — editing an old one is not a first.
       if (!isEdit) claim("first_expense");
     } else {
       const i = saved as Income;
+      const previous = isEdit
+        ? (incomes.find((x) => x.id === i.id) ?? null)
+        : null;
       setIncomes((prev) =>
         isEdit ? prev.map((x) => (x.id === i.id ? i : x)) : [...prev, i]
       );
+      reconcileSavings("income", i, previous);
       if (!isEdit) claim("first_income");
     }
   }
@@ -342,6 +446,7 @@ export function DayView({ date }: { date: string }) {
             date={date}
             categories={modeCategories}
             loans={mode === "expense" ? loans : []}
+            pots={formPots}
             editing={editing && editing.kind === mode ? editing.item : null}
             onSaved={handleSaved}
             onCancelEdit={() => setEditing(null)}
@@ -592,6 +697,7 @@ function EntryForm({
   date,
   categories,
   loans,
+  pots,
   editing,
   onSaved,
   onCancelEdit,
@@ -601,6 +707,9 @@ function EntryForm({
   categories: Category[];
   /** Loan chips, shown after the ordinary expense ones. Empty for income. */
   loans: LoanSummary[];
+  /** Savings chips: deposit into a pot on the expense side, withdraw on the
+   *  income side. */
+  pots: SavingSummary[];
   editing: Expense | Income | null;
   onSaved: (saved: Expense | Income, isEdit: boolean) => void;
   onCancelEdit: () => void;
@@ -704,11 +813,23 @@ function EntryForm({
   const selectedLoan = categoryId
     ? (loans.find((l) => l.category_id === categoryId) ?? null)
     : null;
+
+  // Withdrawing from an empty pot is meaningless, so the income side only
+  // offers pots that actually hold something.
+  const shownPots = isIncome ? pots.filter((p) => p.balance > 0) : pots;
+  const selectedPot = categoryId
+    ? (shownPots.find((p) => p.category_id === categoryId) ?? null)
+    : null;
+
   const verb = isIncome
-    ? "income"
+    ? selectedPot
+      ? "withdrawal"
+      : "income"
     : selectedLoan
       ? "payment"
-      : "expense";
+      : selectedPot
+        ? "deposit"
+        : "expense";
 
   return (
     <Card>
@@ -799,8 +920,61 @@ function EntryForm({
             </div>
           )}
 
+          {/* Savings pots ride the same form: pick a pot instead of a
+              category and the amount moves its balance — up from the expense
+              side, back down from the income side. */}
+          {shownPots.length > 0 && (
+            <div className="space-y-1.5" data-tour="expense-savings">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {isIncome ? "Withdraw from savings" : "Savings"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {shownPots.map((p) => {
+                  const selected = categoryId === p.category_id;
+                  const full = isReached(p);
+                  return (
+                    <button
+                      key={p.category_id}
+                      type="button"
+                      onClick={() => setCategoryId(p.category_id)}
+                      className={cn(
+                        "ripple flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                        selected
+                          ? "border-transparent text-white"
+                          : "text-muted-foreground hover:bg-muted",
+                        full && !selected && "opacity-60"
+                      )}
+                      style={selected ? { backgroundColor: p.color } : {}}
+                    >
+                      <span>
+                        {p.icon ?? "🐷"} {p.name}
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          selected ? "opacity-80" : "opacity-70"
+                        )}
+                      >
+                        {full ? "reached" : formatMoneyCompact(p.balance)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* What this installment does to the loan, before it is saved. */}
           {selectedLoan && <LoanPaymentPreview loan={selectedLoan} amount={amount} />}
+
+          {/* And what this entry does to the pot. */}
+          {selectedPot && (
+            <SavingMovementPreview
+              pot={selectedPot}
+              amount={amount}
+              direction={isIncome ? "out" : "in"}
+            />
+          )}
 
           {/* Grouped so the tour can spotlight "note → payment → save" as one. */}
           <div className="space-y-3" data-tour="expense-submit">
@@ -897,6 +1071,59 @@ function EntryForm({
  * The point of repaying through the expense form is watching the balance fall
  * — so show it falling before the save, not only after.
  */
+/**
+ * What this entry does to the pot, before it is saved. Mirrors
+ * LoanPaymentPreview — the difference is that the balance can move either
+ * way, and a pot without a target has no percentage to show.
+ */
+function SavingMovementPreview({
+  pot,
+  amount,
+  direction,
+}: {
+  pot: SavingSummary;
+  amount: string;
+  direction: "in" | "out";
+}) {
+  const value = parseFloat(amount);
+  const pending = Number.isFinite(value) && value > 0 ? value : 0;
+  const after =
+    pending > 0
+      ? applyContribution(pot, {
+          [direction === "in" ? "depositDelta" : "withdrawDelta"]: pending,
+          txDelta: 1,
+        })
+      : pot;
+  const overdraw =
+    direction === "out" && pending > pot.balance ? pending - pot.balance : 0;
+
+  return (
+    <div className="space-y-1.5 rounded-lg border bg-muted/40 px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="min-w-0 truncate font-medium">
+          {pot.icon ?? "🐷"} {pot.name}
+        </span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatMoney(after.balance)} in
+          {pending > 0 && " after this"}
+        </span>
+      </div>
+      <SavingProgress pot={after} height="h-1.5" />
+      {hasTarget(after) && !isReached(after) && (
+        <p className="text-[11px] text-muted-foreground">
+          {formatMoney(remainingToTarget(after))} to go
+        </p>
+      )}
+      {overdraw > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {formatMoney(overdraw)} more than the pot holds — saved as income
+          either way, and the pot lands at zero.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function LoanPaymentPreview({
   loan,
   amount,

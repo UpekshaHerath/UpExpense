@@ -1,5 +1,8 @@
-/** A category's side of the ledger. Loans are expense-side, but tracked. */
-export type CategoryKind = "expense" | "income" | "loan";
+/**
+ * A category's side of the ledger. Loans and savings are both expense-side
+ * (money leaves the spendable pile) but carry their own progress tracking.
+ */
+export type CategoryKind = "expense" | "income" | "loan" | "saving";
 
 /** The two kinds that have a transaction table of their own. */
 export type EntryKind = "expense" | "income";
@@ -79,5 +82,36 @@ export type LoanSummary = {
   remaining: number;
   tx_count: number;
   last_paid_on: string | null;
+  created_at: string;
+};
+
+/** The extra fields a `kind: "saving"` category carries. */
+export type Saving = {
+  category_id: string;
+  user_id: string;
+  /** null = open-ended pot, no goal to reach. */
+  target: number | null;
+  description: string | null;
+  closed_at: string | null;
+  created_at: string;
+};
+
+/** One row of `saving_summaries()` — a pot plus its balance. */
+export type SavingSummary = {
+  category_id: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  target: number | null;
+  description: string | null;
+  /** Sum of expenses on this category — money put in. */
+  deposited: number;
+  /** Sum of incomes on this category — money taken back out. */
+  withdrawn: number;
+  /** deposited − withdrawn, floored at 0. */
+  balance: number;
+  tx_count: number;
+  last_activity_on: string | null;
+  closed_at: string | null;
   created_at: string;
 };
