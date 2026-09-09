@@ -18,6 +18,7 @@ import {
   DialogSectionHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ReminderSettings } from "@/components/reminder-settings";
 import { TOUR_START_EVENT } from "@/components/tour/tour";
 
 const ACCENTS = [
@@ -127,6 +128,8 @@ export function SettingsDialog({
               })}
             </div>
           </DialogSection>
+
+          <ReminderSettings />
 
           <DialogSection>
             <DialogSectionHeader
