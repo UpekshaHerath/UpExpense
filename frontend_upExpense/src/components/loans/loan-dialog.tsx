@@ -23,6 +23,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  MoneyPrefix,
+  moneyInputPadding,
+  useCurrency,
+} from "@/components/currency";
 
 /**
  * Add / edit a loan. Same form both ways — editing only differs in that the
@@ -70,6 +75,7 @@ function LoanForm({
   const supabase = createClient();
 
   const [name, setName] = useState(editing?.name ?? "");
+  const { currency } = useCurrency();
   const [principal, setPrincipal] = useState(
     editing ? String(editing.principal) : ""
   );
@@ -168,9 +174,7 @@ function LoanForm({
               }
             />
             <div className="relative mt-3">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">
-                Rs.
-              </span>
+              <MoneyPrefix symbol={currency.symbol} />
               <Input
                 type="number"
                 inputMode="decimal"
@@ -179,9 +183,10 @@ function LoanForm({
                 placeholder="0.00"
                 value={principal}
                 onChange={(e) => setPrincipal(e.target.value)}
-                aria-label="Total to repay, in rupees"
+                aria-label={`Total to repay, in ${currency.name}`}
                 autoFocus={!editing}
-                className="h-12 bg-background pl-10 text-lg font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                style={{ paddingLeft: moneyInputPadding(currency.symbol) }}
+                className="h-12 bg-background text-lg font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
           </DialogSection>
@@ -233,7 +238,7 @@ function LoanForm({
                   {icon || "🏦"} {name.trim() || "Loan name"}
                 </span>
                 <span className="shrink-0 tabular-nums opacity-80">
-                  {validAmount ? formatMoneyCompact(parsed) : "Rs 0"}
+                  {validAmount ? formatMoneyCompact(parsed) : formatMoneyCompact(0)}
                 </span>
               </span>
             </div>

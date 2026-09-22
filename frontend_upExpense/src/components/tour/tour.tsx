@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useCurrency } from "@/components/currency";
 import { TOUR_STEPS } from "@/components/tour/steps";
 
 /**
@@ -89,6 +90,7 @@ export function Tour() {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
+  const { confirmed: currencyConfirmed } = useCurrency();
 
   const [index, setIndex] = useState<number | null>(null);
   // Tagged with the step it was measured for, so a stale spotlight can never
@@ -106,6 +108,8 @@ export function Tour() {
   /* Should it run at all?                                               */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
+    // New accounts pick a currency first; the tour waits its turn.
+    if (currencyConfirmed !== true) return;
     let ignore = false;
     (async () => {
       try {
@@ -136,7 +140,7 @@ export function Tour() {
       ignore = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currencyConfirmed]);
 
   /* Replay, triggered from Settings. */
   useEffect(() => {

@@ -48,6 +48,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  MoneyPrefix,
+  moneyInputPadding,
+  useCurrency,
+} from "@/components/currency";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/date-picker";
 import { DaySkeleton } from "@/components/skeletons";
@@ -717,6 +722,7 @@ function EntryForm({
   const supabase = createClient();
   const amountRef = useRef<HTMLInputElement>(null);
   const isIncome = kind === "income";
+  const { currency } = useCurrency();
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   const [categoryId, setCategoryId] = useState<string | null>(
@@ -840,9 +846,7 @@ function EntryForm({
           </p>
 
           <div className="relative" data-tour="expense-amount">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">
-              Rs.
-            </span>
+            <MoneyPrefix symbol={currency.symbol} />
             <Input
               ref={amountRef}
               type="number"
@@ -852,8 +856,9 @@ function EntryForm({
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              aria-label="Amount in rupees"
-              className="h-11 pl-10 text-lg font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              aria-label={`Amount in ${currency.name}`}
+              style={{ paddingLeft: moneyInputPadding(currency.symbol) }}
+              className="h-11 text-lg font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
 

@@ -1,22 +1,53 @@
-const currencyFormatter = new Intl.NumberFormat("en-LK", {
-  style: "currency",
-  currency: "LKR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import { DEFAULT_CURRENCY } from "@/lib/currency";
+
+/**
+ * The signed-in user's currency. Held at module level so every formatter —
+ * including ones called from toasts and callbacks — reads the same value
+ * without threading it through props. <CurrencyProvider> keeps it in sync
+ * with profiles.currency and remounts the page when it changes.
+ */
+let activeCurrency = DEFAULT_CURRENCY;
+let currencyFormatter: Intl.NumberFormat;
+let compactFormatter: Intl.NumberFormat;
+
+export function setActiveCurrency(code: string) {
+  activeCurrency = code;
+  // Amounts are numeric(12, 2): never show more decimals than we store, and
+  // fewer when the currency has none (JPY, KRW…).
+  const digits = Math.min(
+    new Intl.NumberFormat("en", { style: "currency", currency: code })
+      .resolvedOptions().maximumFractionDigits ?? 2,
+    2
+  );
+  currencyFormatter = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: code,
+    currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  compactFormatter = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: code,
+    currencyDisplay: "narrowSymbol",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+}
+
+setActiveCurrency(DEFAULT_CURRENCY);
+
+export function getActiveCurrency(): string {
+  return activeCurrency;
+}
 
 export function formatMoney(amount: number): string {
   return currencyFormatter.format(amount);
 }
 
-const compactNumberFormatter = new Intl.NumberFormat("en-LK", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-/** Short money for tight spots (chips, badges): "Rs 1.2M", "Rs 45K". */
+/** Short money for tight spots (chips, badges): "Rs 1.2M", "$45K". */
 export function formatMoneyCompact(amount: number): string {
-  return `Rs ${compactNumberFormatter.format(amount)}`;
+  return compactFormatter.format(amount);
 }
 
 /** Money with an explicit +/− sign — for net balances (income − expense). */

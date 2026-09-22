@@ -49,7 +49,7 @@ export const REWARDS: Record<RewardKey, Reward> = {
   first_no_spend: {
     emoji: "🧘",
     title: "A whole day, wallet untouched",
-    line: "Zero rupees out. Somewhere, a shopping cart weeps quietly.",
+    line: "Not a cent out. Somewhere, a shopping cart weeps quietly.",
     cta: "Zen achieved",
     toast: "First no-spend day. Zen master.",
   },
