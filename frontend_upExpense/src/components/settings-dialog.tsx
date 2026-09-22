@@ -1,7 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { Check, Compass, Palette, Settings2 } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { Check, Coins, Compass, Palette, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   DialogSectionHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyDialog, useCurrency } from "@/components/currency";
 import { ReminderSettings } from "@/components/reminder-settings";
 import { TOUR_START_EVENT } from "@/components/tour/tour";
 
@@ -75,6 +76,8 @@ export function SettingsDialog({
   );
 
   const current = ACCENTS.find((a) => a.id === accent) ?? ACCENTS[0];
+  const { currency } = useCurrency();
+  const [currencyOpen, setCurrencyOpen] = useState(false);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,6 +130,28 @@ export function SettingsDialog({
                 );
               })}
             </div>
+          </DialogSection>
+
+          <DialogSection>
+            <DialogSectionHeader
+              icon={<Coins />}
+              title="Currency"
+              hint={`${currency.name} · ${currency.symbol}`}
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrencyOpen(true)}
+                >
+                  Change
+                </Button>
+              }
+            />
+            <CurrencyDialog
+              mode="change"
+              open={currencyOpen}
+              onOpenChange={setCurrencyOpen}
+            />
           </DialogSection>
 
           <ReminderSettings />

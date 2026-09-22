@@ -69,7 +69,7 @@ export const TOUR_STEPS: TourStep[] = [
     path: () => `/day/${todayISO()}`,
     target: "expense-amount",
     title: "Enter the amount",
-    body: "Start here. Amounts are in rupees and must be greater than zero.",
+    body: "Start here. Amounts are in your currency and must be greater than zero.",
   },
   {
     id: "expense-categories",

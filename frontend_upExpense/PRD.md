@@ -101,7 +101,7 @@ Responsive web application. Mobile-first design — most expense entry happens o
 | P2-5 | **Comparisons:** month-vs-month and year-vs-year views (e.g. July vs June, 2026 vs 2025). | Should |
 | P2-6 | **Quick-add:** floating "+" button on every screen, defaulting to today's date. | Should |
 | P2-7 | **Dark mode** with system-preference detection. | Should |
-| P2-8 | **Currency setting:** default LKR, user-configurable symbol/format. Single currency per account. | Should |
+| P2-8 | **Currency setting:** default USD, user-configurable symbol/format. Single currency per account. | Should |
 
 ---
 
