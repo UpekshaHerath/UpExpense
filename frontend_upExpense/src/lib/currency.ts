@@ -1,5 +1,5 @@
 /** The currency every account starts on (profiles.currency default). */
-export const DEFAULT_CURRENCY = "LKR";
+export const DEFAULT_CURRENCY = "USD";
 
 /**
  * Circulating ISO 4217 codes. Intl.supportedValuesOf("currency") would also

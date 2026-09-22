@@ -2,7 +2,9 @@
 --
 -- profiles.currency has existed since 001 (default 'LKR') but nothing read it.
 -- The app now formats every amount in the user's own currency and asks new
--- accounts to pick one on first login.
+-- accounts to pick one on first login. The column default moves to 'USD'
+-- here — it only seeds the row before the picker is confirmed, so this
+-- doesn't touch any existing account's currency.
 --
 -- currency_confirmed_at records that the user actually chose — a null means
 -- "still on the default, show the picker". Amounts are stored as plain numbers
@@ -13,6 +15,9 @@
 
 alter table public.profiles
   add column if not exists currency_confirmed_at timestamptz;
+
+alter table public.profiles
+  alter column currency set default 'USD';
 
 -- Existing accounts have been logging in rupees all along — keep them on LKR
 -- without interrupting them. Only accounts created after this get the picker.
